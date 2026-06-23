@@ -467,8 +467,45 @@ the docs panel, hints, and visual polish. Levels land in staged PRs:
 - later: onboarding tutorial, docs panel, tiered hints, polish.
 *DoD:* a new player can go from level 1 to the end with in-game guidance only.
 
-**Phase 7 — Stretch.** Ghost/replay URL sharing, A/B compare two algorithms
-side by side, and daily-seed challenge.
+**Phase 7 — Stretch.** Ghost/replay URL sharing, daily-seed challenge, and the A/B
+compare-two-algorithms tool detailed below.
+
+*A/B compare two algorithms side by side.* Replay two algorithms (the player's vs a
+reference, or two references) on the **same level and the same seed**, with their
+two buildings playing in sync. Crucially, the seed is **seed 1 only** — that's the
+single run we visualize/replay — so the tool can pre-compute the comparison from the
+two deterministic traces.
+
+The headline feature is **notable-moment callouts**: a curated timeline of the few
+*genuinely interesting* points where the two algorithms diverge, so the learner knows
+exactly where to look instead of staring at the whole run. Each marker jumps the
+synced replay to that tick with a short, non-spoiler note ("here the down-bound car
+declines the up-rider and comes back for them, while the other grabs them and gets
+dragged the wrong way"). It is **curated, not exhaustive** — detect candidates from
+the traces, rank by teaching value, and surface only the standout handful, never
+every tick. What counts as notable (the kinds of moments worth flagging):
+
+- **Divergent boarding / the directional fork** — one car picks up a rider the other
+  deliberately passes (e.g. a down-committed car declining an up-rider, then serving
+  them on the return sweep). This is the SSTF-vs-LOOK floor-3 moment.
+- **Wrong-way detour** — one algorithm carries a rider *away* from their destination
+  (greedy thrash) while the other gives a direct ride.
+- **Commit vs. thrash** — one holds its sweep direction where the other reverses to
+  chase a nearer call.
+- **Fairness / starvation** — a rider's wait crosses the amber/red threshold under one
+  algorithm but not the other (the worst-case-vs-average trade-off made visible).
+- **Big positional divergence** — at the same tick the two cars are serving very
+  different parts of the building, or one finishes well ahead of the other.
+
+Computed locally from the two recorded traces (no network, no AI — consistent with the
+local-first feedback doctrine in §7); the analyzer that finds and ranks these moments
+is the natural extension of the per-run anti-pattern analyzer. Pedagogically this is
+"show, don't tell" plus the "observe the algorithms" goal: point the learner at the
+exact instants where the choice of algorithm changes the outcome.
+
+(Also possible later, behind the feedback interface: optional Monaco editor and an
+optional bring-your-own-key generative provider for plain-English run/compare prose —
+additive only, never bundled, never required.)
 
 ---
 
