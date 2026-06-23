@@ -9,7 +9,7 @@ Runs entirely client-side: no server, no build step, no network needed to play
 or to be scored. See `CLAUDE.md` for the design doctrine and `PROJECT_PLAN.md`
 for the full technical spec.
 
-## Status: through the reference gallery (Phases 0–4)
+## Status: through progression (Phases 0–5)
 
 What works today:
 
@@ -41,12 +41,18 @@ What works today:
 - A lean **in-page code editor** (`src/render/editor.js`) — syntax highlighting,
   line numbers, tab indent — behind a `createEditor()` wrapper so a heavier
   editor (CodeMirror/Monaco) can swap in later without touching the rest.
+- **Progression & persistence** (`src/game/progression.js`, `progress.js`): a
+  level bar with per-level star badges and lock state; a level unlocks once the
+  previous earns ≥ 1★, with a "level unlocked" toast. Best stars, your code per
+  level, and the last-played level are saved to `localStorage`, so progress
+  survives a reload and you resume where you left off.
 - A full play loop: read the brief, edit the algorithm, Run, watch it, read the
-  metrics + feedback.
-- Passing headless tests (`simulation`, `recording`, `phase3`, `references`).
+  metrics + feedback, and advance through unlocking levels.
+- Passing headless tests (`simulation`, `recording`, `phase3`, `references`,
+  `progression`).
 
-Not yet built (later phases): level select + progression UI, the full level set
-(incl. multi-elevator), an onboarding tutorial, and tiered hints.
+Not yet built (later phases): the full level set (incl. multi-elevator), an
+onboarding tutorial, and tiered hints.
 
 ## Run it
 
@@ -63,7 +69,7 @@ npm run serve      # python3 -m http.server 8000
 No framework — plain assertions runnable in Node:
 
 ```
-npm test           # engine, recording, sandbox, and reference suites
+npm test           # engine, recording, sandbox, reference, progression suites
 ```
 
 ## Layout
@@ -72,9 +78,9 @@ npm test           # engine, recording, sandbox, and reference suites
 index.html            # app shell
 src/engine/           # deterministic simulation (rng, passengers, metrics, simulation)
 src/reference/        # FCFS, SSTF, SCAN, LOOK, C-SCAN controllers + gallery (internal)
-src/game/             # levels (data), scoring/stars, progress, UI
+src/game/             # levels (data), scoring/stars, progress, progression (unlock), UI
 src/render/           # Canvas renderer + rAF playback + lean editor + highlighter
 src/sandbox/          # Web Worker harness (watchdog) + worker + code compiler
-src/main.js           # wires brief -> editor -> run -> watch + results + gallery
-test/                 # headless engine, recording, sandbox, and reference tests
+src/main.js           # wires brief -> editor -> run -> watch + results + gallery + level bar
+test/                 # headless engine, recording, sandbox, reference, progression tests
 ```

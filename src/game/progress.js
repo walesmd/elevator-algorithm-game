@@ -58,3 +58,14 @@ export function loadCode(levelId) {
   const data = read();
   return (data.code && data.code[levelId]) || null;
 }
+
+// Remember which level the player was last on, so a reload resumes there.
+export function saveLastLevel(levelId) {
+  const data = read();
+  data.lastLevel = levelId;
+  write(data);
+}
+
+export function loadLastLevel() {
+  return read().lastLevel || null;
+}

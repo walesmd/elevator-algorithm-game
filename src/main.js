@@ -11,7 +11,8 @@
 import { levels } from './game/levels.js';
 import { scoreFromPlayerRuns, scoreLevel } from './game/scoring.js';
 import { runSimulation } from './engine/simulation.js';
-import { saveResult, getBest, saveCode, loadCode } from './game/progress.js';
+import { saveResult, getBest, saveCode, loadCode, saveLastLevel, loadLastLevel } from './game/progress.js';
+import { isUnlocked } from './game/progression.js';
 import { renderBrief, renderResults, renderComparison } from './game/ui.js';
 import { createRenderer } from './render/renderer.js';
 import { createPlayer } from './render/playback.js';
@@ -68,8 +69,17 @@ async function run() {
     const res = await harness.score({ code, level, seeds: level.seeds, recordSeed: level.seeds[0] });
     if (currentLevel !== level) return; // switched levels mid-run — drop the stale result
     const result = scoreFromPlayerRuns(level, res.perSeed.map((p) => p.metrics), res.warnings);
+
+    // Which levels were locked before we record this result?
+    const lockedBefore = levels.filter((l) => !isUnlocked(levels, l.id, starsOf));
     saveResult(level.id, result.stars, result.composite);
     renderResults(els.results, result, getBest(level.id));
+    renderLevelBar(); // reflect new stars and any freshly unlocked level
+    const justUnlocked = lockedBefore.filter((l) => isUnlocked(levels, l.id, starsOf));
+    if (justUnlocked.length) {
+      showToast(`🎉 ${justUnlocked.map((l) => l.name.split('—')[0].trim()).join(', ')} unlocked!`);
+    }
+
     if (res.frames && res.frames.length) {
       visualize(res.frames, level.seeds[0], result.metrics.total);
     }
@@ -257,18 +267,77 @@ function compareAll() {
   revealInView(els.comparison, 'start');
 }
 
+// --- Progression: level select, unlock state, persistence -----------------
+
+const starsOf = (id) => getBest(id).stars || 0;
+const starGlyphs = (n) => '★★★'.slice(0, n) + '☆☆☆'.slice(0, 3 - n);
+
+// Rebuild the level bar from saved progress: each level shows its best stars, the
+// active one is highlighted, and a locked level is disabled with a hint to clear
+// the one before it. Called on select and after every run (stars/unlocks change).
+function renderLevelBar() {
+  // Preserve keyboard/screen-reader focus across the rebuild (WCAG 2.4.3): note
+  // which level button held focus, then restore it on the freshly-built one.
+  const focusedId = els.levelBar.contains(document.activeElement) ? document.activeElement.dataset.id : null;
+  els.levelBar.replaceChildren();
+  levels.forEach((level, idx) => {
+    const unlocked = isUnlocked(levels, level.id, starsOf);
+    const name = level.name.split('—')[0].trim();
+    const isActive = level.id === currentLevel.id;
+    const btn = document.createElement('button');
+    btn.className = 'lvl';
+    btn.dataset.id = level.id;
+    btn.classList.toggle('active', isActive);
+    if (isActive) btn.setAttribute('aria-current', 'page'); // mark the current level (not colour-only)
+    if (unlocked) {
+      const s = starsOf(level.id);
+      btn.innerHTML = `${escapeHtml(name)} <span class="lvl-stars" aria-label="${s} of 3 stars">${starGlyphs(s)}</span>`;
+    } else {
+      // Locked: kept focusable via aria-disabled (NOT the `disabled` attribute, which
+      // assistive tech skips) so a screen-reader user can reach it and hear why.
+      // selectLevel() guards the click, so activating it is a no-op.
+      const prevName = levels[idx - 1].name.split('—')[0].trim();
+      btn.setAttribute('aria-disabled', 'true');
+      btn.innerHTML = `${escapeHtml(name)} <span class="lvl-lock" aria-hidden="true">🔒</span>`;
+      btn.title = `Earn at least one ★ on ${prevName} to unlock`;
+      btn.setAttribute('aria-label', `${name} — locked. ${btn.title}`);
+    }
+    btn.addEventListener('click', () => selectLevel(level));
+    els.levelBar.appendChild(btn);
+  });
+  if (focusedId) {
+    const restore = [...els.levelBar.children].find((b) => b.dataset.id === focusedId);
+    if (restore) restore.focus();
+  }
+}
+
+// Where to land on load: the last-played level if it's still unlocked, else level 1.
+function resumeLevel() {
+  const last = loadLastLevel();
+  const lvl = levels.find((l) => l.id === last);
+  return lvl && isUnlocked(levels, lvl.id, starsOf) ? lvl : levels[0];
+}
+
 function selectLevel(level) {
+  if (!isUnlocked(levels, level.id, starsOf)) return; // defensive — locked buttons are disabled
   currentLevel = level;
+  saveLastLevel(level.id);
   renderBrief(els.brief, level);
   editor.setValue(loadCode(level.id) || STARTER_CODE);
   els.results.innerHTML = '<p class="hint">Press Run to score your algorithm and watch it drive the building.</p>';
   els.comparison.innerHTML = ''; // stale: it was for the previous level
-  for (const btn of els.levelBar.children) {
-    btn.classList.toggle('active', btn.dataset.id === level.id);
-  }
+  renderLevelBar();
   // Build a renderer sized for THIS level's geometry, then show the static building.
   viz.renderer = createRenderer(els.canvas, level);
   resetStage();
+}
+
+let toastTimer = null;
+function showToast(msg) {
+  els.toast.textContent = msg;
+  els.toast.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => els.toast.classList.remove('show'), 3500);
 }
 
 function bindControls() {
@@ -380,6 +449,7 @@ function init() {
     galleryList: document.getElementById('gallery-list'),
     comparison: document.getElementById('comparison'),
     compareBtn: document.getElementById('compare-all'),
+    toast: document.getElementById('toast'),
   };
 
   harness = createHarness({ budgetMs: 4000 });
@@ -390,16 +460,10 @@ function init() {
     onChange: (code) => saveCode(currentLevel.id, code),
   });
 
-  for (const level of levels) {
-    const btn = document.createElement('button');
-    btn.textContent = level.name.split('—')[0].trim();
-    btn.dataset.id = level.id;
-    btn.addEventListener('click', () => selectLevel(level));
-    els.levelBar.appendChild(btn);
-  }
-
   bindControls();
-  selectLevel(currentLevel);
+  // The level bar is built by selectLevel -> renderLevelBar. Resume where the
+  // player left off (if that level is still unlocked), else start at level 1.
+  selectLevel(resumeLevel());
 }
 
 if (typeof document !== 'undefined') {
