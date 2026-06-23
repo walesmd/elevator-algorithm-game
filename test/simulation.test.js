@@ -71,6 +71,31 @@ function avgOver(level, factory, key) {
   assert(sorted, 'passengers are sorted by spawn time');
 }
 
+// --- 2b. No passenger ever calls for the floor they're already on -----------
+// Across every spawn shape (incl. up-peak/down-peak, which no shipped level uses
+// yet) and a range of floor counts/seeds — a same-floor "trip" is a zero-distance
+// request that should never exist.
+{
+  const configs = [
+    L1,
+    L2,
+    { numFloors: 5, spawn: { type: 'up-peak', count: 60, firstTick: 0, lastTick: 200, lobbyBias: 0.7 }, timeLimit: 1000 },
+    { numFloors: 10, spawn: { type: 'down-peak', count: 60, firstTick: 0, lastTick: 300, lobbyBias: 0.7 }, timeLimit: 2000 },
+    { numFloors: 2, spawn: { type: 'uniform', count: 40, firstTick: 0, lastTick: 100 }, timeLimit: 500 },
+  ];
+  let sameFloor = 0;
+  let total = 0;
+  for (const L of configs) {
+    for (let seed = 1; seed <= 40; seed++) {
+      for (const p of generatePassengers(L, seed)) {
+        total++;
+        if (p.origin === p.dest) sameFloor++;
+      }
+    }
+  }
+  assert(sameFloor === 0, `no passenger has origin === dest across all spawn types (checked ${total})`);
+}
+
 // --- 3. Simulation determinism ---------------------------------------------
 {
   const r1 = runSimulation(L2, 2, fcfs.createController);
@@ -144,6 +169,19 @@ function avgOver(level, factory, key) {
   const doNothing = () => ({ step: () => [{ action: 'IDLE' }] });
   const idleScore = scoreLevel(L1, doNothing);
   assert(idleScore.stars === 0 && !idleScore.metrics.deliveredAll, 'do-nothing controller earns 0 stars');
+}
+
+// --- 9. maxWarnings caps a flooding controller without changing the run -----
+{
+  const alwaysUp = () => ({ step: () => [{ action: 'MOVE_UP' }] }); // illegal at the top every tick
+  const uncapped = runSimulation(L1, 1, alwaysUp);
+  const capped = runSimulation(L1, 1, alwaysUp, { maxWarnings: 5 });
+  assert(uncapped.warnings.length > 5, 'without a cap, a flooding controller produces many warnings');
+  assert(capped.warnings.length === 5, 'maxWarnings caps the collected warnings');
+  assert(
+    JSON.stringify(capped.metrics) === JSON.stringify(uncapped.metrics),
+    'maxWarnings affects only warnings, not the simulation/metrics'
+  );
 }
 
 function r1(n) {

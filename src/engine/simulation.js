@@ -43,9 +43,15 @@ export function runSimulation(level, seed, createController, opts = {}) {
   // the controller. It's opt-in because the headless scoring path never needs it
   // and stays fast; determinism is untouched — frames are pure functions of state.
   const wantRecord = !!opts.record;
+  // A controller that misbehaves every tick (throws, illegal move, …) would warn
+  // every tick; cap the collected warnings so a pathological run can't build a huge
+  // array. Default is unlimited, so the synchronous scoring path and tests are
+  // unchanged; the sandbox worker passes a small cap.
+  const maxWarnings = opts.maxWarnings ?? Infinity;
 
   const passengers = generatePassengers(level, seed);
   const warnings = [];
+  const warn = (msg) => { if (warnings.length < maxWarnings) warnings.push(msg); };
   const trace = [];
   const frames = [];
 
@@ -115,11 +121,11 @@ export function runSimulation(level, seed, createController, opts = {}) {
     try {
       commands = controller.step(snapshot) || [];
     } catch (e) {
-      warnings.push(`step() threw at t=${time}: ${e.message}`);
+      warn(`step() threw at t=${time}: ${e.message}`);
       commands = [];
     }
     if (!Array.isArray(commands)) {
-      warnings.push(`step() must return an array of commands (got ${typeof commands}).`);
+      warn(`step() must return an array of commands (got ${typeof commands}).`);
       commands = [];
     }
 
@@ -129,16 +135,16 @@ export function runSimulation(level, seed, createController, opts = {}) {
       const cmd = commands[i] || { action: 'IDLE' };
       const action = cmd && cmd.action;
       if (!ACTIONS.has(action)) {
-        warnings.push(`Unknown command for elevator ${i} at t=${time}: ${JSON.stringify(cmd)}`);
+        warn(`Unknown command for elevator ${i} at t=${time}: ${JSON.stringify(cmd)}`);
         el.direction = 'idle';
         return;
       }
       if (action === 'MOVE_UP') {
         if (el.floor < numFloors - 1) startMove(el, +1, ticksPerFloor);
-        else warnings.push(`MOVE_UP ignored at top floor (elevator ${i}, t=${time}).`);
+        else warn(`MOVE_UP ignored at top floor (elevator ${i}, t=${time}).`);
       } else if (action === 'MOVE_DOWN') {
         if (el.floor > 0) startMove(el, -1, ticksPerFloor);
-        else warnings.push(`MOVE_DOWN ignored at bottom floor (elevator ${i}, t=${time}).`);
+        else warn(`MOVE_DOWN ignored at bottom floor (elevator ${i}, t=${time}).`);
       } else if (action === 'STOP') {
         delivered += serviceStop(el, waiting, capacity, time);
         el.doors = 'open';
