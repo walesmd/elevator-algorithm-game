@@ -145,6 +145,28 @@ function avgOver(level, factory, key) {
   assert(lookComp <= fcfsComp, `LOOK composite (${r1(lookComp)}) <= FCFS composite (${r1(fcfsComp)})`);
 }
 
+// --- 5b. Direction-aware boarding: a wrong-way car can't pick riders up --------
+// Real boarding respects the car's committed direction. A car that only ever opens
+// its doors "serving up" must strand every down-going rider (they won't board an
+// up-bound car), proving direction-aware boarding actually excludes them.
+{
+  const serveUpOnly = (config) => ({
+    step(state) {
+      const e = state.elevators[0];
+      if (!e.ready) return [{ action: 'IDLE' }];
+      const stopHere = e.carCalls.includes(e.floor) || state.hallCalls.some((h) => h.floor === e.floor && h.direction === 'up');
+      if (stopHere) return [{ action: 'STOP', serving: 'up' }];
+      return [{ action: e.floor < config.numFloors - 1 ? 'MOVE_UP' : 'MOVE_DOWN' }];
+    },
+  });
+  const res = runSimulation(L2, 1, serveUpOnly);
+  const downStranded = res.passengers.some((p) => p.dest < p.origin && p.dropTick == null);
+  assert(downStranded && !res.metrics.deliveredAll, 'serving only "up" strands down-going riders (direction-aware boarding)');
+
+  // And a correct directional controller (LOOK) serves both ways and delivers all.
+  assert(runSimulation(L2, 1, look.createController).metrics.deliveredAll, 'directional LOOK serves both directions and delivers everyone');
+}
+
 // --- 6. Command resolution: illegal moves are non-fatal --------------------
 {
   const alwaysUp = () => ({ step: () => [{ action: 'MOVE_UP' }] });

@@ -1,15 +1,17 @@
 // references.test.js — the reference-algorithm gallery (Phase 4). Run: `node test/references.test.js`.
 //
-// Guarantees the comparison/insert feature can rely on: there are five well-formed
-// references, each compiles from its `source` (the editor-insertable text is the
-// SAME thing that gets scored — no drift), each delivers everyone on L1 and L2, and
-// the spoiler gating is set as the doctrine requires (FCFS open, solvers gated).
+// Guarantees the comparison/insert feature can rely on: the well-formed references
+// each compile from their `source` (the editor-insertable text is the SAME thing
+// that gets scored — no drift), each delivers everyone on every level (across a
+// broad seed range, not just the scoring seeds), and the spoiler gating is set as
+// the doctrine requires (FCFS open, solvers gated).
 
 import { gallery } from '../src/reference/gallery.js';
 import { compileController } from '../src/sandbox/compile.js';
 import { runSimulation } from '../src/engine/simulation.js';
 import { scoreLevel } from '../src/game/scoring.js';
 import { getLevel, levels } from '../src/game/levels.js';
+import { STARTER_CODE } from '../src/game/starter.js';
 
 let passed = 0;
 let failed = 0;
@@ -23,10 +25,11 @@ const L2 = getLevel('l2');
 
 // --- 1. Roster shape --------------------------------------------------------
 {
-  assert(gallery.length === 5, 'gallery has five reference algorithms');
+  assert(gallery.length === 4, 'gallery has four reference algorithms');
   const ids = gallery.map((g) => g.id);
-  assert(new Set(ids).size === 5, 'ids are unique');
-  assert(['fcfs', 'sstf', 'scan', 'look', 'cscan'].every((id) => ids.includes(id)), 'has FCFS, SSTF, SCAN, LOOK, C-SCAN');
+  assert(new Set(ids).size === 4, 'ids are unique');
+  assert(['fcfs', 'sstf', 'scan', 'look'].every((id) => ids.includes(id)), 'has FCFS, SSTF, SCAN, LOOK');
+  assert(!ids.includes('cscan'), 'C-SCAN dropped (cannot serve a real bidirectional tower under directional boarding)');
 
   const wellFormed = gallery.every(
     (g) =>
@@ -69,6 +72,26 @@ const L2 = getLevel('l2');
   }
 }
 
+// --- 4a. BROAD-seed delivery (regression guard against direction-aware livelocks) -
+// The fixed scoring seeds [1-5] are a tiny sample; a livelock/strand can hide on
+// "unlucky" seeds (a directional LOOK once oscillated forever on L1 seed 26). Sweep
+// many seeds for the references AND the shipped starter — a reference that strands
+// anyone violates the doctrine, and the starter must never break a player's run.
+{
+  const starter = compileController(STARTER_CODE);
+  const controllers = [...gallery.map((g) => ({ id: g.id, c: g.createController })), { id: 'starter', c: starter }];
+  let stranded = 0;
+  for (const L of levels) {
+    for (const { c } of controllers) {
+      for (let s = 1; s <= 60; s++) if (!runSimulation(L, s, c).metrics.deliveredAll) stranded++;
+    }
+  }
+  assert(stranded === 0, `references + starter deliver everyone across seeds 1-60 on every level (${levels.length * controllers.length * 60} runs)`);
+  let starterClears = true;
+  for (const L of levels) if (scoreLevel(L, starter).stars < 1) starterClears = false;
+  assert(starterClears, 'the starter clears (>= 1 star) on every level');
+}
+
 // --- 4b. Par is sane on every level: FCFS clears (>=1 star) and is beaten by ---
 // LOOK (3 stars), so the 1-star baseline and 3-star par bracket every level.
 {
@@ -88,11 +111,10 @@ const L2 = getLevel('l2');
   const floors = new Set(tr.map((x) => x.floor));
   assert(floors.has(0) && floors.has(L2.numFloors - 1), 'SCAN reaches both building ends');
 
-  // C-SCAN never STOPs while deadheading down — i.e. it is genuinely one-directional.
-  // (Structural: its source has a single STOP, inside the up-sweep branch.)
-  const cscanSrc = gallery.find((g) => g.id === 'cscan').source;
-  const stopCount = (cscanSrc.match(/["']STOP["']/g) || []).length;
-  assert(stopCount === 1, 'C-SCAN issues STOP from exactly one place (up-sweep only)');
+  // The directional sweeps declare a serving direction on STOP; FCFS/SSTF do too.
+  for (const id of ['look', 'scan']) {
+    assert(/serving/.test(gallery.find((g) => g.id === id).source), `${id} declares a serving direction (directional)`);
+  }
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

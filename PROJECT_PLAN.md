@@ -433,20 +433,22 @@ car; infinite loops are caught and reported, not fatal.
 in place from Phase 1 (composite score, multi-seed runs, reference-anchored
 thresholds, results screen with the metric breakdown and feedback). This phase
 added the **reference-algorithm gallery and comparison tool**:
-- Five built-in reference controllers in `src/reference/` — **FCFS, SSTF, SCAN,
-  LOOK, C-SCAN** (the classic scheduling family), each a clean, well-commented
-  teaching artifact with a name, the concept it illustrates, and a blurb.
+- Built-in reference controllers in `src/reference/` — **FCFS, SSTF, SCAN, LOOK**
+  (the elevator-scheduling family), each a clean, well-commented teaching artifact
+  with a name, the concept it illustrates, and a blurb. (C-SCAN shipped here
+  originally but was dropped when direction-aware boarding landed — a one-directional
+  disk scheme can't pick up down-bound riders on a real bidirectional tower.)
 - **One-click insert:** load any reference's source straight into the code editor
   to run, watch, and tinker with it.
-- **Compare all:** run all five on the *current* level and show their
+- **Compare all:** run all the references on the *current* level and show their
   metrics/stars side by side, with the ability to visualize any of them in the
   Canvas — so a learner can feel, on any level, why one strategy beats another.
 - **Spoiler-gated:** the gallery is a clearly-labeled, collapsed-by-default
   "reference approaches (spoilers)" panel — never shown by default; revealing it
   is the explicit opt-in the doctrine requires. FCFS is the sanctioned strawman;
   the four solving algorithms are the gated spoilers.
-*DoD:* from any level, open the gallery, insert/compare/visualize all five
-reference algorithms and see accurate, reproducible stars and a par comparison.
+*DoD:* from any level, open the gallery, insert/compare/visualize the reference
+algorithms and see accurate, reproducible stars and a par comparison.
 
 **Phase 5 — Progression + persistence. ✅ DONE.** Level select with per-level star
 badges and lock state, unlock logic (a level opens once the previous earns ≥ 1★),

@@ -19,36 +19,7 @@ import { createPlayer } from './render/playback.js';
 import { createEditor } from './render/editor.js';
 import { createHarness } from './sandbox/harness.js';
 import { gallery, getReference } from './reference/gallery.js';
-
-// A deliberately naive starter — the sanctioned "strawman". It serves the oldest
-// call and drops riders, one errand at a time. It works, but it's beatable on
-// purpose. The good algorithms are NOT shipped here.
-const STARTER_CODE = `// You write createController. The engine calls step(state) each tick and you
-// return one command per elevator: MOVE_UP, MOVE_DOWN, STOP, or IDLE.
-//
-// state.elevators[0] = { floor, ready, load, capacity, carCalls, ... }
-// state.hallCalls    = [ { floor, direction }, ... ]  // people waiting
-//
-// This starter just chases the oldest call. Can you make riders wait less?
-function createController(config) {
-  return {
-    step(state) {
-      const e = state.elevators[0];
-      if (!e.ready) return [{ action: 'IDLE' }];
-
-      // Where are we headed? Drop a rider if we have one, else the oldest call.
-      let target = null;
-      if (e.load > 0) target = e.carCalls[0];
-      else if (state.hallCalls.length > 0) target = state.hallCalls[0].floor;
-
-      if (target == null) return [{ action: 'IDLE' }];
-      if (e.floor < target) return [{ action: 'MOVE_UP' }];
-      if (e.floor > target) return [{ action: 'MOVE_DOWN' }];
-      return [{ action: 'STOP' }];
-    },
-  };
-}
-`;
+import { STARTER_CODE } from './game/starter.js';
 
 let currentLevel = levels[0];
 let els = null;
@@ -255,7 +226,7 @@ function watchReference(id) {
   revealInView(els.canvas, 'center');
 }
 
-// Score all five references on the current level and show them side by side,
+// Score all the references on the current level and show them side by side,
 // then scroll the table into view so the result is right where you're looking.
 function compareAll() {
   if (running) return;

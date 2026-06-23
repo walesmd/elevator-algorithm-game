@@ -5,14 +5,17 @@
 // teaching progression: the naive baseline, then a greedy idea, then the sweep
 // family. FCFS is the sanctioned strawman (spoiler:false); the rest are gated
 // behind the opt-in "reference approaches (spoilers)" reveal in the UI.
+//
+// These are the algorithms that map to a real bidirectional elevator. (C-SCAN, a
+// one-directional disk-scheduling scheme, was dropped: with real direction-aware
+// boarding it can never pick up down-bound riders, so it can't serve a real tower.)
 
 import * as fcfs from './fcfs.js';
 import * as sstf from './sstf.js';
 import * as scan from './scan.js';
 import * as look from './look.js';
-import * as cscan from './cscan.js';
 
-export const gallery = [fcfs, sstf, scan, look, cscan].map((mod) => ({
+export const gallery = [fcfs, sstf, scan, look].map((mod) => ({
   ...mod.meta,
   source: mod.source,
   createController: mod.createController,

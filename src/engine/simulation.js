@@ -12,10 +12,12 @@
 //     happen as the doors open. The car is busy until they close.
 //   - A busy car (moving or doors not closed) ignores commands that tick.
 //
-// Boarding rule (foundation): on STOP, everyone whose destination is this floor
-// gets off, then waiting passengers at this floor board in arrival order up to
-// capacity, regardless of direction. Direction-aware boarding is a documented
-// future refinement (it starts to matter at the up/down-peak levels).
+// Boarding rule (direction-aware, like a real car): on STOP, everyone whose
+// destination is this floor gets off; then waiting riders board in arrival order up
+// to capacity, but ONLY those heading the car's committed direction — a down-rider
+// won't step into an up-bound car. The direction is the command's `serving`, else
+// the car's current travel direction; a still-idle car (no direction yet) admits
+// anyone. (A plain STOP with no serving and no movement is the naive case.)
 
 import { generatePassengers } from './passengers.js';
 import { summarize } from './metrics.js';
@@ -146,7 +148,18 @@ export function runSimulation(level, seed, createController, opts = {}) {
         if (el.floor > 0) startMove(el, -1, ticksPerFloor);
         else warn(`MOVE_DOWN ignored at bottom floor (elevator ${i}, t=${time}).`);
       } else if (action === 'STOP') {
-        delivered += serviceStop(el, waiting, capacity, time);
+        // Real direction-aware boarding: a car shows the direction it's committed to,
+        // and riders going the other way wait for the next car. An EXPLICIT `serving`
+        // is taken strictly (the algorithm owns that choice). Without one, the engine
+        // implies a direction from the car's travel direction — forgivingly, so a
+        // naive car can't wedge at a turnaround (see serviceStop).
+        const explicit = cmd.serving === 'up' || cmd.serving === 'down';
+        const serving = explicit
+          ? cmd.serving
+          : el.direction === 'up' || el.direction === 'down'
+            ? el.direction
+            : null;
+        delivered += serviceStop(el, waiting, capacity, time, serving, explicit);
         el.doors = 'open';
         el.doorRemaining = doorTicks;
       } else {
@@ -206,9 +219,12 @@ function startMove(el, dir, ticksPerFloor) {
   el.direction = dir > 0 ? 'up' : 'down';
 }
 
-// Alight everyone whose destination is this floor, then board waiting riders in
-// arrival order up to capacity. Returns the number delivered (alighted) here.
-function serviceStop(el, waiting, capacity, time) {
+// Alight everyone whose destination is this floor, then board waiting riders here
+// in arrival order up to capacity. If `serving` ('up'|'down') is given, only riders
+// heading that way board (real direction-aware boarding — a rider going the other
+// way waits for the next car); without it, everyone boards (naive, direction-blind).
+// Returns the number delivered (alighted) here.
+function serviceStop(el, waiting, capacity, time, serving, strict) {
   let deliveredHere = 0;
   for (let k = el.onboard.length - 1; k >= 0; k--) {
     const p = el.onboard[k];
@@ -218,9 +234,24 @@ function serviceStop(el, waiting, capacity, time) {
       deliveredHere++;
     }
   }
+
+  // Pick the single direction we'll board this stop. An explicit `serving` is honored
+  // exactly. An implied direction is forgiving: if nobody here is heading that way,
+  // serve whoever IS here (the longest-waiting one's direction) so a naive car can't
+  // get stuck at a turnaround. Either way it's ONE direction — a stop never boards
+  // both, so "board everyone" is never available.
+  const dirOf = (p) => (p.dest > p.origin ? 'up' : 'down');
+  let board = serving;
+  if (!strict) {
+    const here = waiting.filter((p) => p.origin === el.floor);
+    if (!board || !here.some((p) => dirOf(p) === board)) {
+      board = here.length ? dirOf(here[0]) : board;
+    }
+  }
+
   for (let k = 0; k < waiting.length && el.onboard.length < capacity; ) {
     const p = waiting[k];
-    if (p.origin === el.floor) {
+    if (p.origin === el.floor && (!board || dirOf(p) === board)) {
       p.pickupTick = time;
       el.onboard.push(p);
       waiting.splice(k, 1);

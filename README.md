@@ -16,16 +16,19 @@ What works today:
 - A deterministic, seeded simulation engine (`src/engine/`) — DOM-free, runs in
   the browser, a Web Worker, and Node. It can optionally **record a frame per
   tick** (`runSimulation(level, seed, factory, { record: true })`) for replay.
-- **Five reference controllers** (`src/reference/`) — the classic scheduling
-  family **FCFS, SSTF, SCAN, LOOK, C-SCAN** — each a clean, well-commented
-  teaching artifact (one `source` string is both the scored controller and the
-  editor-insertable code, so they can't drift). FCFS + LOOK also anchor the star
-  thresholds.
+  Boarding is **direction-aware**, like a real car: a `STOP` declares a `serving`
+  direction (or inherits the car's travel direction) and only riders heading that
+  way board — a down-rider won't step into an up-bound car.
+- **Four reference controllers** (`src/reference/`) — the elevator-scheduling
+  family **FCFS, SSTF, SCAN, LOOK** — each a clean, well-commented teaching
+  artifact (one `source` string is both the scored controller and the
+  editor-insertable code, so they can't drift). The sweeps (SCAN/LOOK) run as real
+  *directional collective* controllers; FCFS + LOOK anchor the star thresholds.
 - A **reference gallery & comparison tool**: a collapsed-by-default, clearly
   labeled "reference approaches (spoilers)" panel. Open it to **insert** any
   algorithm into the editor, **watch** it drive the current level in the Canvas,
-  or **compare all five** side by side (stars + metrics, best-in-column
-  highlighted) — so you can feel, on any level, why one strategy beats another.
+  or **compare them** side by side (stars + metrics, best-in-column highlighted) —
+  so you can feel, on any level, why one strategy beats another.
 - Multi-seed scoring with reference-anchored 1/2/3 stars (`src/game/scoring.js`).
 - A **live Canvas visualization** (`src/render/`): press Run and watch your
   algorithm drive the building — shaft(s), car(s), riders waiting on each floor
@@ -83,7 +86,7 @@ npm test           # engine, recording, sandbox, reference, progression suites
 ```
 index.html            # app shell
 src/engine/           # deterministic simulation (rng, passengers, metrics, simulation)
-src/reference/        # FCFS, SSTF, SCAN, LOOK, C-SCAN controllers + gallery (internal)
+src/reference/        # FCFS, SSTF, SCAN, LOOK controllers + gallery (internal)
 src/game/             # levels (data), scoring/stars, progress, progression (unlock), UI
 src/render/           # Canvas renderer + rAF playback + lean editor + highlighter
 src/sandbox/          # Web Worker harness (watchdog) + worker + code compiler
