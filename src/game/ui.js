@@ -20,9 +20,9 @@ export function renderBrief(el, level) {
 
 export function renderResults(el, result, best) {
   if (result.error) {
-    el.innerHTML = `<div class="results error"><h3>Your code didn't run</h3><pre>${escape(
-      result.error
-    )}</pre><p>Fix the error and run again.</p></div>`;
+    el.innerHTML = `<div class="results error"><h3>${escape(
+      result.errorTitle || "Your code didn't run"
+    )}</h3><pre>${escape(result.error)}</pre><p>Fix it and run again.</p></div>`;
     return;
   }
 
@@ -69,6 +69,53 @@ export function feedbackFor(result) {
     return `Everyone arrives — nice. But your average wait is well above par. Watch for riders you pass who want to go the same direction you're already heading. There's a classic strategy for this.`;
   }
   return `Solid run — everyone delivered and you're near par. Look for the single metric furthest from par and focus there.`;
+}
+
+// Side-by-side comparison of the reference algorithms on one level. Each row is
+// { id, name, stars, metrics, deliveredAll }. The best value in each
+// lower-is-better column (and the most stars) is highlighted, so the trade-offs
+// between strategies are legible at a glance. A "Watch" button per row lets the
+// learner replay any of them; main.js wires the clicks.
+export function renderComparison(el, rows) {
+  if (!rows || !rows.length) {
+    el.innerHTML = '';
+    return;
+  }
+  const delivered = rows.filter((r) => r.deliveredAll);
+  const best = (key) => (delivered.length ? Math.min(...delivered.map((r) => r.metrics[key])) : null);
+  const bestStars = Math.max(...rows.map((r) => r.stars));
+  const lowers = { avgWait: best('avgWait'), avgJourney: best('avgJourney'), maxWait: best('maxWait'), distance: best('distance') };
+
+  // A ✓ marks the winner so the signal isn't carried by colour alone (WCAG 1.4.1).
+  const mark = ' <span class="cmp-mark" aria-hidden="true">✓</span>';
+  const cell = (r, key) => {
+    const v = fmt(r.metrics[key]);
+    const isBest = r.deliveredAll && lowers[key] != null && Math.abs(r.metrics[key] - lowers[key]) < 1e-9;
+    return `<td class="${isBest ? 'cmp-best' : ''}">${v}${isBest ? mark : ''}</td>`;
+  };
+
+  el.innerHTML = `
+    <table class="cmp">
+      <thead><tr>
+        <th>Algorithm</th><th>Stars</th><th>Avg wait</th><th>Avg journey</th>
+        <th>Max wait</th><th>Distance</th><th>Delivered</th><th></th>
+      </tr></thead>
+      <tbody>
+        ${rows
+          .map((r) => {
+            const bestStar = r.stars === bestStars && r.stars > 0;
+            return `<tr class="${r.deliveredAll ? '' : 'cmp-undelivered'}">
+          <td class="cmp-name">${escape(r.name)}</td>
+          <td class="${bestStar ? 'cmp-best' : ''}">${stars(r.stars)}${bestStar ? mark : ''}</td>
+          ${cell(r, 'avgWait')}${cell(r, 'avgJourney')}${cell(r, 'maxWait')}${cell(r, 'distance')}
+          <td>${r.metrics.delivered}/${r.metrics.total}${r.deliveredAll ? ' ✓' : ' ✗'}</td>
+          <td><button class="cmp-watch" data-id="${escape(r.id)}">Watch</button></td>
+        </tr>`;
+          })
+          .join('')}
+      </tbody>
+    </table>
+    <p class="hint">Lower is better for wait, journey, and distance; the column winner is marked <span class="cmp-mark">✓</span>. Rows that didn't deliver everyone are dimmed and don't count. Click <b>Watch</b> to replay any one above.</p>`;
 }
 
 function row(label, you, par) {

@@ -11,7 +11,9 @@ it across increasingly hard levels. Everything runs client-side — no server.
   client-side dependencies vendored into the repo where they clearly earn their
   weight (e.g. the code editor). No build step, no framework, no server-side
   process. Runs offline; deploys as static files.
-- **Status:** planning. This document is the spec the build follows.
+- **Status:** Phases 0–3 complete (engine, scoring/stars, visualization, sandbox +
+  editor). In progress: Phase 4 — the reference-algorithm gallery and comparison
+  tool. This document is the spec the build follows.
 
 ---
 
@@ -398,29 +400,52 @@ not just examples.
 Phased so there's a runnable, testable artifact at every step. Each phase has a
 definition of done (DoD).
 
-**Phase 0 — Project setup.** Repo, file layout, `index.html`, ES-module loading,
-a tiny dev server for local testing.
-*DoD:* blank Canvas renders, modules load with no build step.
+**Phase 0 — Project setup. ✅ DONE.** Repo, file layout, `index.html`, ES-module
+loading, a tiny dev server for local testing.
+*DoD met:* Canvas renders, modules load with no build step.
 
-**Phase 1 — Simulation core (headless).** Domain model, fixed-tick engine,
-seeded passenger generation, command resolution, metric collection, plus the
-built-in FCFS reference controller and unit tests.
-*DoD:* run a level headless and print deterministic metrics; tests pass on repeat
+**Phase 1 — Simulation core (headless). ✅ DONE.** Domain model, fixed-tick engine,
+seeded passenger generation, command resolution, metric collection, the built-in
+FCFS + LOOK reference controllers, multi-seed scoring + reference-anchored stars,
+and unit tests.
+*DoD met:* runs a level headless with deterministic metrics; tests pass on repeat
 runs with the same seed.
 
-**Phase 2 — Visualization.** Canvas renderer for shaft/car/passengers,
-interpolated animation decoupled from ticks, run/pause/step/speed controls.
-*DoD:* watch the FCFS reference drive a level at adjustable speed.
+**Phase 2 — Visualization. ✅ DONE.** Canvas renderer for shaft(s)/car(s)/waiting
+passengers (who warm calm→amber→red as they wait), interpolated animation
+decoupled from ticks via recorded per-tick frames, and run/pause/step/speed/scrub
+controls.
+*DoD met:* watch a reference (or your own) algorithm drive a level at adjustable
+speed.
 
-**Phase 3 — Player code + sandbox.** CodeMirror editor, Web Worker harness with
-timeout watchdog, the algorithm API, and error/warning surfacing to the UI.
-*DoD:* write a controller in the editor, run it, see it drive the car; infinite
-loops are caught and reported, not fatal.
+**Phase 3 — Player code + sandbox. ✅ DONE.** Web Worker harness with a timeout
+watchdog, the algorithm API running off the main thread, friendly error/warning
+surfacing, and an in-page code editor. (Editor note: shipped as a lean,
+offline, zero-dependency editor — textarea + syntax-highlight overlay + line
+numbers — behind a swappable `createEditor()` wrapper, rather than vendoring
+CodeMirror, to honor the no-build/offline/lean constraints; CodeMirror/Monaco can
+drop in later through the same wrapper.)
+*DoD met:* write a controller in the editor, run it sandboxed, watch it drive the
+car; infinite loops are caught and reported, not fatal.
 
-**Phase 4 — Scoring + stars.** Composite score, multi-seed scoring runs, star
-thresholds from reference algorithms, results screen with the metric breakdown
-and feedback.
-*DoD:* finish a level and get accurate, reproducible stars with a par comparison.
+**Phase 4 — Scoring, stars + the reference gallery.** Scoring/stars are in place
+from Phase 1 (composite score, multi-seed runs, reference-anchored thresholds,
+results screen with the metric breakdown and feedback). This phase adds the
+**reference-algorithm gallery and comparison tool**:
+- Five built-in reference controllers in `src/reference/` — **FCFS, SSTF, SCAN,
+  LOOK, C-SCAN** (the classic scheduling family), each a clean, well-commented
+  teaching artifact with a name, the concept it illustrates, and a blurb.
+- **One-click insert:** load any reference's source straight into the code editor
+  to run, watch, and tinker with it.
+- **Compare all:** run all five on the *current* level and show their
+  metrics/stars side by side, with the ability to visualize any of them in the
+  Canvas — so a learner can feel, on any level, why one strategy beats another.
+- **Spoiler-gated:** the gallery is a clearly-labeled, collapsed-by-default
+  "reference approaches (spoilers)" panel — never shown by default; revealing it
+  is the explicit opt-in the doctrine requires. FCFS is the sanctioned strawman;
+  the four solving algorithms are the gated spoilers.
+*DoD:* from any level, open the gallery, insert/compare/visualize all five
+reference algorithms and see accurate, reproducible stars and a par comparison.
 
 **Phase 5 — Progression + persistence.** Level select, unlock logic,
 `localStorage` for progress / best stars / per-level code.

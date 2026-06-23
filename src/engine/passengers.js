@@ -46,6 +46,12 @@ export function generatePassengers(level, seed) {
       dest = pickOther(rng, numFloors, origin);
     }
 
+    // Safety net: nobody calls the elevator to the floor they're already on. Each
+    // spawn shape above already avoids this, but enforce it centrally so a traffic
+    // type added later can't accidentally create a zero-distance "trip". (A no-op
+    // for the shapes above, so it doesn't perturb the seeded sequence.)
+    if (dest === origin) dest = pickOther(rng, numFloors, origin);
+
     people.push({ id: i, origin, dest, spawnTick, pickupTick: null, dropTick: null });
   }
 

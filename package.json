@@ -5,7 +5,7 @@
   "type": "module",
   "description": "A browser game that teaches algorithmic thinking through elevator dispatch. Runs client-side; no server.",
   "scripts": {
-    "test": "node test/simulation.test.js && node test/recording.test.js",
+    "test": "node test/simulation.test.js && node test/recording.test.js && node test/phase3.test.js && node test/references.test.js",
     "serve": "python3 -m http.server 8000"
   }
 }

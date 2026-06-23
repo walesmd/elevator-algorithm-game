@@ -248,6 +248,7 @@ export function createRenderer(canvas, level) {
 
   // Capacity as a grid of pips: filled = a rider aboard, outlined = a free seat.
   function drawRiders(ev, ix, iy, iw, ih) {
+    if (iw <= 0 || ih <= 0) return; // cabin too small to draw into (very tall building)
     const cap = Math.max(1, ev.capacity);
     const cols = Math.min(cap, Math.max(2, Math.round(Math.sqrt(cap * (iw / ih)))));
     const rows = Math.ceil(cap / cols);
@@ -373,7 +374,8 @@ function clamp(v, lo, hi) {
 }
 
 function roundRect(ctx, x, y, w, h, r) {
-  const rr = Math.min(r, w / 2, h / 2);
+  if (w <= 0 || h <= 0) return; // degenerate box — skip (avoids negative-radius arcTo)
+  const rr = Math.max(0, Math.min(r, w / 2, h / 2));
   ctx.beginPath();
   ctx.moveTo(x + rr, y);
   ctx.arcTo(x + w, y, x + w, y + h, rr);

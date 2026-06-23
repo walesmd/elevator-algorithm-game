@@ -28,10 +28,27 @@ const referenceCache = new Map();
  */
 export function scoreLevel(level, createController) {
   const runs = level.seeds.map((s) => runSimulation(level, s, createController));
-  const metrics = aggregate(runs);
+  return scoreFromPlayerRuns(
+    level,
+    runs.map((r) => r.metrics),
+    runs.flatMap((r) => r.warnings)
+  );
+}
+
+/**
+ * Score from per-seed metrics that were produced elsewhere (e.g. by the sandbox
+ * Web Worker running the player's code). This keeps the trusted scoring/stars math
+ * on the main thread while the untrusted run happens off it. Returns the SAME shape
+ * as scoreLevel, so the results UI doesn't care which path produced it.
+ * @param {object} level
+ * @param {Array<object>} perSeedMetrics - one metrics summary per seed
+ * @param {string[]} [warnings]
+ */
+export function scoreFromPlayerRuns(level, perSeedMetrics, warnings = []) {
+  const metrics = aggregate(perSeedMetrics.map((m) => ({ metrics: m })));
   const composite = compositeOf(metrics, level.weights);
 
-  const { fcfsAgg, lookAgg, fcfsComposite, lookComposite } = references(level);
+  const { fcfsAgg, lookAgg, fcfsComposite, lookComposite } = getReferences(level);
   const stars = computeStars(metrics, composite, fcfsComposite, lookComposite);
 
   return {
@@ -39,7 +56,7 @@ export function scoreLevel(level, createController) {
     composite,
     stars,
     par: { fcfs: fcfsAgg, look: lookAgg, fcfsComposite, lookComposite },
-    warnings: runs.flatMap((r) => r.warnings),
+    warnings,
   };
 }
 
@@ -78,7 +95,7 @@ export function computeStars(metrics, composite, fcfsComposite, lookComposite) {
   return 0;
 }
 
-function references(level) {
+export function getReferences(level) {
   if (referenceCache.has(level.id)) return referenceCache.get(level.id);
   const fcfsRuns = level.seeds.map((s) => runSimulation(level, s, fcfs.createController));
   const lookRuns = level.seeds.map((s) => runSimulation(level, s, look.createController));
