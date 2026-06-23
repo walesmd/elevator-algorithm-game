@@ -11,9 +11,10 @@ it across increasingly hard levels. Everything runs client-side — no server.
   client-side dependencies vendored into the repo where they clearly earn their
   weight (e.g. the code editor). No build step, no framework, no server-side
   process. Runs offline; deploys as static files.
-- **Status:** Phases 0–3 complete (engine, scoring/stars, visualization, sandbox +
-  editor). In progress: Phase 4 — the reference-algorithm gallery and comparison
-  tool. This document is the spec the build follows.
+- **Status:** Phases 0–5 complete (engine, scoring/stars, visualization, sandbox +
+  editor, reference gallery, progression + persistence). Next: Phase 6 — content
+  + polish (the full level set, onboarding, hints). This document is the spec the
+  build follows.
 
 ---
 
@@ -428,10 +429,10 @@ drop in later through the same wrapper.)
 *DoD met:* write a controller in the editor, run it sandboxed, watch it drive the
 car; infinite loops are caught and reported, not fatal.
 
-**Phase 4 — Scoring, stars + the reference gallery.** Scoring/stars are in place
-from Phase 1 (composite score, multi-seed runs, reference-anchored thresholds,
-results screen with the metric breakdown and feedback). This phase adds the
-**reference-algorithm gallery and comparison tool**:
+**Phase 4 — Scoring, stars + the reference gallery. ✅ DONE.** Scoring/stars are
+in place from Phase 1 (composite score, multi-seed runs, reference-anchored
+thresholds, results screen with the metric breakdown and feedback). This phase
+added the **reference-algorithm gallery and comparison tool**:
 - Five built-in reference controllers in `src/reference/` — **FCFS, SSTF, SCAN,
   LOOK, C-SCAN** (the classic scheduling family), each a clean, well-commented
   teaching artifact with a name, the concept it illustrates, and a blurb.
@@ -447,9 +448,11 @@ results screen with the metric breakdown and feedback). This phase adds the
 *DoD:* from any level, open the gallery, insert/compare/visualize all five
 reference algorithms and see accurate, reproducible stars and a par comparison.
 
-**Phase 5 — Progression + persistence.** Level select, unlock logic,
-`localStorage` for progress / best stars / per-level code.
-*DoD:* progress and saved code survive a reload; levels unlock on ≥ 1★.
+**Phase 5 — Progression + persistence. ✅ DONE.** Level select with per-level star
+badges and lock state, unlock logic (a level opens once the previous earns ≥ 1★),
+`localStorage` for progress / best stars / per-level code, a "level unlocked"
+toast, and resuming the last-played level on reload.
+*DoD met:* progress and saved code survive a reload; levels unlock on ≥ 1★.
 
 **Phase 6 — Content + polish.** The full level set (including multi-elevator),
 an onboarding tutorial, the docs panel (API reference + starter + reference
@@ -457,9 +460,7 @@ algorithms), hints, and visual polish.
 *DoD:* a new player can go from level 1 to the end with in-game guidance only.
 
 **Phase 7 — Stretch.** Ghost/replay URL sharing, A/B compare two algorithms
-side by side, daily-seed challenge, visual themes, optional Monaco editor, and an
-optional bring-your-own-key generative feedback provider behind the feedback
-interface (additive prose only — never required, never bundled).
+side by side, and daily-seed challenge.
 
 ---
 

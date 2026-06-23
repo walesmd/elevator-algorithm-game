@@ -11,9 +11,23 @@
       header { padding:14px 20px; border-bottom:1px solid var(--line); }
       header h1 { font-size:17px; margin:0; }
       header p { margin:2px 0 0; color:var(--muted); font-size:13px; }
-      #level-bar { display:flex; gap:8px; padding:12px 20px 0; }
+      #level-bar { display:flex; gap:8px; padding:12px 20px 0; flex-wrap:wrap; }
       #level-bar button { background:var(--panel); color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:6px 12px; cursor:pointer; }
-      #level-bar button.active { border-color:var(--accent); color:var(--accent); }
+      #level-bar button.active { border-color:var(--accent); color:var(--accent); font-weight:600; } /* bold = non-colour cue */
+      #level-bar button[aria-disabled="true"] { opacity:.5; cursor:not-allowed; }
+      #level-bar button:not([aria-disabled="true"]):hover { border-color:var(--accent); }
+      #level-bar .lvl-stars { font-size:11px; letter-spacing:1px; color:#e6b072; margin-left:3px; }
+      #level-bar button.active .lvl-stars { color:#ffcf6b; }
+      #level-bar .lvl-lock { font-size:11px; margin-left:3px; }
+      /* Transient "level unlocked" toast */
+      .toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(16px);
+               background:#10242e; color:var(--ink); border:1px solid var(--accent); border-radius:8px;
+               padding:10px 16px; font-size:14px; font-weight:600; box-shadow:0 6px 24px rgba(0,0,0,.45);
+               opacity:0; pointer-events:none; transition:opacity .25s, transform .25s; z-index:50; }
+      .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+      @media (prefers-reduced-motion: reduce) {
+        .toast, .toast.show { transition:opacity .15s; transform:translateX(-50%); }
+      }
       main { display:grid; grid-template-columns: 1fr 1fr; gap:16px; padding:16px 20px; align-items:start; }
       .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px; }
       h2 { font-size:16px; margin:0 0 8px; }
@@ -192,6 +206,8 @@
       watchdog, so an infinite loop ends the run with a message instead of freezing the page. Scored locally across
       several fixed seeds.
     </p>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
     <script type="module" src="./src/main.js"></script>
   </body>
