@@ -12,9 +12,9 @@ it across increasingly hard levels. Everything runs client-side — no server.
   weight (e.g. the code editor). No build step, no framework, no server-side
   process. Runs offline; deploys as static files.
 - **Status:** Phases 0–5 complete (engine, scoring/stars, visualization, sandbox +
-  editor, reference gallery, progression + persistence). Next: Phase 6 — content
-  + polish (the full level set, onboarding, hints). This document is the spec the
-  build follows.
+  editor, reference gallery, progression + persistence). In progress: Phase 6 —
+  the level curriculum (taller buildings, multiple elevators, zoned skyscrapers,
+  hotel traffic), landing as staged PRs. This document is the spec the build follows.
 
 ---
 
@@ -433,20 +433,22 @@ car; infinite loops are caught and reported, not fatal.
 in place from Phase 1 (composite score, multi-seed runs, reference-anchored
 thresholds, results screen with the metric breakdown and feedback). This phase
 added the **reference-algorithm gallery and comparison tool**:
-- Five built-in reference controllers in `src/reference/` — **FCFS, SSTF, SCAN,
-  LOOK, C-SCAN** (the classic scheduling family), each a clean, well-commented
-  teaching artifact with a name, the concept it illustrates, and a blurb.
+- Built-in reference controllers in `src/reference/` — **FCFS, SSTF, SCAN, LOOK**
+  (the elevator-scheduling family), each a clean, well-commented teaching artifact
+  with a name, the concept it illustrates, and a blurb. (C-SCAN shipped here
+  originally but was dropped when direction-aware boarding landed — a one-directional
+  disk scheme can't pick up down-bound riders on a real bidirectional tower.)
 - **One-click insert:** load any reference's source straight into the code editor
   to run, watch, and tinker with it.
-- **Compare all:** run all five on the *current* level and show their
+- **Compare all:** run all the references on the *current* level and show their
   metrics/stars side by side, with the ability to visualize any of them in the
   Canvas — so a learner can feel, on any level, why one strategy beats another.
 - **Spoiler-gated:** the gallery is a clearly-labeled, collapsed-by-default
   "reference approaches (spoilers)" panel — never shown by default; revealing it
   is the explicit opt-in the doctrine requires. FCFS is the sanctioned strawman;
   the four solving algorithms are the gated spoilers.
-*DoD:* from any level, open the gallery, insert/compare/visualize all five
-reference algorithms and see accurate, reproducible stars and a par comparison.
+*DoD:* from any level, open the gallery, insert/compare/visualize the reference
+algorithms and see accurate, reproducible stars and a par comparison.
 
 **Phase 5 — Progression + persistence. ✅ DONE.** Level select with per-level star
 badges and lock state, unlock logic (a level opens once the previous earns ≥ 1★),
@@ -454,9 +456,15 @@ badges and lock state, unlock logic (a level opens once the previous earns ≥ 1
 toast, and resuming the last-played level on reload.
 *DoD met:* progress and saved code survive a reload; levels unlock on ≥ 1★.
 
-**Phase 6 — Content + polish.** The full level set (including multi-elevator),
-an onboarding tutorial, the docs panel (API reference + starter + reference
-algorithms), hints, and visual polish.
+**Phase 6 — Content + polish. 🚧 IN PROGRESS.** The full level set, then onboarding,
+the docs panel, hints, and visual polish. Levels land in staged PRs:
+- **6A (done):** single-car curriculum — L3 up-peak, L4 hotel traffic, L5 small
+  capacity, L6 tall high-rise (18 floors); adds the `hotel` spawn type.
+- **6B:** multiple elevators — coordination levels + N-car-aware reference
+  controllers (today's references drive only car 0) + a multi-car starter.
+- **6C:** zoned skyscraper — an elevator serves a floor subset; riders transfer at
+  a sky-lobby (engine range/transfer model + renderer zone shading).
+- later: onboarding tutorial, docs panel, tiered hints, polish.
 *DoD:* a new player can go from level 1 to the end with in-game guidance only.
 
 **Phase 7 — Stretch.** Ghost/replay URL sharing, A/B compare two algorithms
