@@ -75,6 +75,7 @@ export function generatePassengers(level, seed) {
 }
 
 function pickOther(rng, n, notThis) {
+  if (n <= 1) return notThis; // degenerate building: no other floor to pick (avoids a hang)
   let v = randInt(rng, n);
   while (v === notThis) v = randInt(rng, n);
   return v;

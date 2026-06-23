@@ -47,9 +47,10 @@ What works today:
   level, and the last-played level are saved to `localStorage`, so progress
   survives a reload and you resume where you left off.
 - A growing **level curriculum** (`src/game/levels.js`): six single-car levels so
-  far — getting moving, sweeping (SCAN/LOOK), morning up-peak, hotel (lobby-centric)
-  traffic, a tight-capacity crush, and an 18-floor high-rise — each isolating one
-  scheduling idea, with traffic shapes `uniform` / `up-peak` / `down-peak` / `hotel`.
+  far — getting moving, sweeping (SCAN/LOOK), a morning up-peak rush, hotel
+  (lobby-centric) traffic, a sudden surge of calls, and an 18-floor high-rise where
+  distance/energy becomes the headline (LOOK's turn-early sweep vs SCAN's run to the
+  ends). Traffic shapes: `uniform` / `up-peak` / `down-peak` / `hotel`.
 - A full play loop: read the brief, edit the algorithm, Run, watch it, read the
   metrics + feedback, and advance through unlocking levels.
 - Passing headless tests (`simulation`, `recording`, `phase3`, `references`,
