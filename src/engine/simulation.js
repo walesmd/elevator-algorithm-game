@@ -1,0 +1,212 @@
+// simulation.js — the deterministic, DOM-free heart of the game.
+//
+// One run = one (level, seed, controller). The engine owns the *physics*
+// (moving the car, door timing, boarding, capacity); the player's controller
+// owns the *algorithm* (which direction, when to stop). The two meet through a
+// small command protocol, one command per elevator per tick.
+//
+// Timing model (fixed tick):
+//   - Moving one floor takes `ticksPerFloor` ticks. While moving, the car is
+//     committed — direction-change commands are ignored until it arrives.
+//   - A STOP opens the doors for `doorTicks` ticks; boarding and alighting
+//     happen as the doors open. The car is busy until they close.
+//   - A busy car (moving or doors not closed) ignores commands that tick.
+//
+// Boarding rule (foundation): on STOP, everyone whose destination is this floor
+// gets off, then waiting passengers at this floor board in arrival order up to
+// capacity, regardless of direction. Direction-aware boarding is a documented
+// future refinement (it starts to matter at the up/down-peak levels).
+
+import { generatePassengers } from './passengers.js';
+import { summarize } from './metrics.js';
+
+const ACTIONS = new Set(['MOVE_UP', 'MOVE_DOWN', 'STOP', 'IDLE']);
+
+/**
+ * Run one deterministic simulation.
+ * @param {object} level - level definition (see game/levels.js)
+ * @param {number} seed
+ * @param {(config:object) => {step:(state:object)=>Array}} createController
+ * @param {{trace?:boolean}} [opts]
+ * @returns {{metrics:object, trace:Array, warnings:Array<string>, passengers:Array}}
+ */
+export function runSimulation(level, seed, createController, opts = {}) {
+  const numFloors = level.numFloors;
+  const numElevators = level.numElevators ?? 1;
+  const capacity = level.capacity ?? 8;
+  const ticksPerFloor = level.ticksPerFloor ?? 2;
+  const doorTicks = level.doorTicks ?? 2;
+  const timeLimit = level.timeLimit ?? 600;
+  const wantTrace = !!opts.trace;
+
+  const passengers = generatePassengers(level, seed);
+  const warnings = [];
+  const trace = [];
+
+  let controller;
+  try {
+    controller = createController({ numFloors, numElevators, capacity });
+  } catch (e) {
+    warnings.push(`createController threw: ${e.message}`);
+    controller = { step: () => [] };
+  }
+  if (!controller || typeof controller.step !== 'function') {
+    warnings.push('createController must return an object with a step(state) method.');
+    controller = { step: () => [] };
+  }
+
+  const elevators = Array.from({ length: numElevators }, (_, i) => ({
+    index: i,
+    floor: 0,
+    direction: 'idle',
+    doors: 'closed',
+    moving: false,
+    travelRemaining: 0,
+    pendingDir: 0,
+    doorRemaining: 0,
+    onboard: [],
+  }));
+
+  const waiting = [];
+  let spawnIdx = 0;
+  let delivered = 0;
+  let distance = 0;
+  let time = 0;
+  const total = passengers.length;
+
+  while (time <= timeLimit && delivered < total) {
+    // 1) Spawn anyone due by now.
+    while (spawnIdx < passengers.length && passengers[spawnIdx].spawnTick <= time) {
+      waiting.push(passengers[spawnIdx]);
+      spawnIdx++;
+    }
+
+    // 2) Advance in-flight physics (travel + doors).
+    for (const el of elevators) {
+      if (el.travelRemaining > 0) {
+        el.travelRemaining--;
+        if (el.travelRemaining === 0) {
+          el.floor += el.pendingDir;
+          el.pendingDir = 0;
+          el.moving = false;
+          distance++;
+        }
+      } else if (el.doorRemaining > 0) {
+        el.doorRemaining--;
+        if (el.doorRemaining === 0) el.doors = 'closed';
+      }
+    }
+
+    // 3) Build the read-only snapshot the controller sees.
+    const snapshot = {
+      time,
+      elevators: elevators.map((el) => snapshotElevator(el, capacity)),
+      hallCalls: buildHallCalls(waiting),
+    };
+
+    // 4) Ask the controller for commands.
+    let commands = [];
+    try {
+      commands = controller.step(snapshot) || [];
+    } catch (e) {
+      warnings.push(`step() threw at t=${time}: ${e.message}`);
+      commands = [];
+    }
+    if (!Array.isArray(commands)) {
+      warnings.push(`step() must return an array of commands (got ${typeof commands}).`);
+      commands = [];
+    }
+
+    // 5) Apply one command per free elevator.
+    elevators.forEach((el, i) => {
+      if (el.moving || el.doorRemaining > 0) return; // busy — ignore
+      const cmd = commands[i] || { action: 'IDLE' };
+      const action = cmd && cmd.action;
+      if (!ACTIONS.has(action)) {
+        warnings.push(`Unknown command for elevator ${i} at t=${time}: ${JSON.stringify(cmd)}`);
+        el.direction = 'idle';
+        return;
+      }
+      if (action === 'MOVE_UP') {
+        if (el.floor < numFloors - 1) startMove(el, +1, ticksPerFloor);
+        else warnings.push(`MOVE_UP ignored at top floor (elevator ${i}, t=${time}).`);
+      } else if (action === 'MOVE_DOWN') {
+        if (el.floor > 0) startMove(el, -1, ticksPerFloor);
+        else warnings.push(`MOVE_DOWN ignored at bottom floor (elevator ${i}, t=${time}).`);
+      } else if (action === 'STOP') {
+        delivered += serviceStop(el, waiting, capacity, time);
+        el.doors = 'open';
+        el.doorRemaining = doorTicks;
+      } else {
+        el.direction = 'idle';
+      }
+      if (wantTrace) trace.push({ t: time, elevator: i, floor: el.floor, action });
+    });
+
+    time++;
+  }
+
+  const metrics = summarize({ passengers, distance, endTick: time, timeLimit });
+  return { metrics, trace, warnings, passengers };
+}
+
+function startMove(el, dir, ticksPerFloor) {
+  el.moving = true;
+  el.pendingDir = dir;
+  el.travelRemaining = ticksPerFloor;
+  el.direction = dir > 0 ? 'up' : 'down';
+}
+
+// Alight everyone whose destination is this floor, then board waiting riders in
+// arrival order up to capacity. Returns the number delivered (alighted) here.
+function serviceStop(el, waiting, capacity, time) {
+  let deliveredHere = 0;
+  for (let k = el.onboard.length - 1; k >= 0; k--) {
+    const p = el.onboard[k];
+    if (p.dest === el.floor) {
+      p.dropTick = time;
+      el.onboard.splice(k, 1);
+      deliveredHere++;
+    }
+  }
+  for (let k = 0; k < waiting.length && el.onboard.length < capacity; ) {
+    const p = waiting[k];
+    if (p.origin === el.floor) {
+      p.pickupTick = time;
+      el.onboard.push(p);
+      waiting.splice(k, 1);
+    } else {
+      k++;
+    }
+  }
+  return deliveredHere;
+}
+
+function snapshotElevator(el, capacity) {
+  const carCalls = [...new Set(el.onboard.map((p) => p.dest))].sort((a, b) => a - b);
+  return {
+    index: el.index,
+    floor: el.floor,
+    direction: el.direction,
+    doors: el.doors,
+    moving: el.moving,
+    ready: !el.moving && el.doorRemaining === 0, // convenience: free to take a command
+    load: el.onboard.length,
+    capacity,
+    carCalls,
+  };
+}
+
+// One hall call per (floor, direction), kept in arrival order (oldest first).
+function buildHallCalls(waiting) {
+  const seen = new Set();
+  const calls = [];
+  for (const p of waiting) {
+    const direction = p.dest > p.origin ? 'up' : 'down';
+    const key = `${p.origin}:${direction}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    calls.push({ floor: p.origin, direction });
+  }
+  return calls;
+}

@@ -1,0 +1,476 @@
+# Elevator Algorithm Game — Project Plan
+
+A browser-based game where the player writes an elevator dispatch algorithm in
+JavaScript, runs it against a simulated building, watches it work, and improves
+it across increasingly hard levels. Everything runs client-side — no server.
+
+- **Primary purpose:** teaching tool. Design priorities, in order: clear
+  algorithmic concepts, honest and legible feedback, a difficulty curve that
+  introduces one new idea at a time.
+- **Tech stack:** vanilla JavaScript (ES modules) + HTML5 Canvas, with lean
+  client-side dependencies vendored into the repo where they clearly earn their
+  weight (e.g. the code editor). No build step, no framework, no server-side
+  process. Runs offline; deploys as static files.
+- **Status:** planning. This document is the spec the build follows.
+
+---
+
+## 1. Vision and learning goals
+
+The player is handed a working-but-naive elevator and a coding panel. Their job
+is to write the brain that decides where the elevator goes. They run it, watch
+passengers wait (or not), see their score, and rewrite the algorithm to do
+better. Each level introduces a new wrinkle that breaks the previous strategy,
+which is the teaching mechanism: the game makes you *feel* why a smarter
+algorithm is needed before handing you the next problem.
+
+Concepts the game is built to teach, level by level:
+
+- **Greedy vs. planned scheduling** — first-come-first-served feels fair but is
+  slow; sweeping (the SCAN / "elevator algorithm" and LOOK variants) is faster.
+- **State and direction** — committing to a direction and serving calls along
+  the way; avoiding passing a waiting passenger going your way.
+- **Starvation and fairness** — optimizing average wait can strand one person
+  forever; max-wait matters too.
+- **Throughput under load** — capacity limits, bursty traffic, rush-hour
+  patterns (morning up-peak, lunch churn, evening down-peak).
+- **Coordination** — with multiple elevators, the hard part is *assignment*: not
+  sending two cars to the same call, zoning, destination dispatch.
+- **Trade-offs and objective functions** — wait time vs. energy/distance vs.
+  fairness. There is no single "correct" algorithm; there is a score to beat.
+
+The design principle throughout: **the player owns the algorithm, the engine
+owns the physics.** They decide direction and stops; the engine handles how
+fast the car moves, how long doors take, and who boards. This keeps attention on
+scheduling — the actual computer-science content — instead of animation math.
+
+---
+
+## 2. Core gameplay loop
+
+```
+        ┌─────────────────────────────────────────────────┐
+        │                                                   │
+        ▼                                                   │
+  Read the level   →  Write / edit algorithm  →  Run simulation
+   (goal + new          (JS in the editor)         (watch it play)
+    constraint)                                          │
+                                                         ▼
+                                                  See metrics + stars
+                                                         │
+                       ┌─────────────────────────────────┤
+                       │                                  │
+              < 1 star (retry, with             ≥ 1 star  → milestone met
+               feedback on what was weak)        next level unlocks
+```
+
+A run has two modes that share one engine:
+
+1. **Headless scoring run** — the simulation executes at full speed with no
+   rendering across several fixed random seeds, producing the official score.
+2. **Visualized run** — the same deterministic run replayed (or run live) at a
+   watchable speed so the player can see what their algorithm actually did.
+
+Separating these matters: scoring stays fast and fair while the visualization
+stays smooth, and both are reproducible because the world is seeded.
+
+---
+
+## 3. Domain model
+
+The simulation is a fixed-tick discrete model. One **tick** is the atomic unit
+of time; everything (movement, door timing, boarding) is expressed in ticks.
+
+- **Building** — `numFloors` (e.g. 5–20). Floors are integers, `0` at the
+  bottom.
+- **Elevator** — position (current floor), direction (`up`/`down`/`idle`), door
+  state (`open`/`closed`/`opening`/`closing`), `moving` flag, onboard passengers,
+  and `capacity`. The model always holds an **array** of elevators, even when
+  there is only one (see §4 — this avoids a painful refactor at the multi-car
+  levels).
+- **Passenger** — spawns on an origin floor at a given tick with a destination
+  floor. Generates a **hall call** (a request at a floor, with a desired
+  direction) while waiting; once aboard, contributes a **car call** (a
+  destination button press). Carries timestamps for wait and journey metrics.
+- **Traffic profile** — a per-level, seeded schedule of passenger spawns
+  (uniform random, up-peak, down-peak, bursts, etc.).
+- **Movement model** — moving one floor takes a fixed number of ticks. While
+  `moving` is `true` the car is committed to reaching the next floor; direction
+  reversals only take effect once it arrives (no teleporting or mid-shaft
+  reversals). Doors take ticks to open, dwell, and close; boarding/alighting
+  consume dwell time.
+
+The engine is **deterministic**: given a level + seed, the passenger stream and
+all physics are identical every run. A small seeded PRNG (e.g. mulberry32) drives
+all randomness. This is what makes scoring fair and bugs reproducible.
+
+---
+
+## 4. The player's algorithm API
+
+This is the heart of the product and the part to design most carefully. The
+player writes a **controller factory**: a function that sets up whatever state
+it wants and returns an object with a `step` method. `step` is called by the
+engine and returns one **command per elevator**.
+
+```js
+// The player writes this. It runs inside a sandboxed Web Worker.
+function createController(config) {
+  // config = { numFloors, numElevators, capacity }
+  // Initialize any state you want to keep between ticks here.
+  const queue = [];
+
+  return {
+    // Called by the engine each tick. Return an array of commands,
+    // one per elevator, indexed the same as state.elevators.
+    step(state) {
+      const e = state.elevators[0];
+      // ...your scheduling logic...
+      return [{ action: 'MOVE_UP' }];
+    }
+  };
+}
+```
+
+**The `state` object passed to `step`:**
+
+```js
+state = {
+  time: 1234,                       // ticks elapsed
+  elevators: [
+    {
+      index: 0,
+      floor: 3,                     // current floor
+      moving: false,                // mid-shaft? (commands ignored until arrival)
+      direction: 'idle',            // 'up' | 'down' | 'idle'
+      doors: 'closed',              // 'open' | 'closed' | 'opening' | 'closing'
+      carCalls: [7, 9],             // destinations of onboard passengers
+      load: 2,                      // passengers aboard
+      capacity: 8,
+    },
+  ],
+  hallCalls: [                      // waiting requests not yet picked up
+    { floor: 5, direction: 'up' },
+    { floor: 2, direction: 'down' },
+  ],
+};
+```
+
+**Commands the player may return per elevator:**
+
+| Command | Effect |
+|---|---|
+| `{ action: 'MOVE_UP' }` | Travel toward the next floor up. |
+| `{ action: 'MOVE_DOWN' }` | Travel toward the next floor down. |
+| `{ action: 'STOP' }` | Open doors at the current floor to load/unload. |
+| `{ action: 'IDLE' }` | Do nothing this tick. |
+
+The engine resolves the rest: enforcing capacity, moving boarders' destinations
+into `carCalls`, running door timing, and updating metrics. Illegal or malformed
+commands (e.g. `MOVE_UP` at the top floor, or a non-object) are treated as
+`IDLE` and surfaced as a non-fatal warning so the player learns without crashing
+the run.
+
+**Why a factory returning `step`, rather than a bare function:** it lets the
+player keep state between ticks (their own queue, a planned route, a target per
+car) without globals — which is exactly the state-management lesson we want, and
+it generalizes cleanly to N elevators.
+
+**Progressive disclosure.** Early levels can ship with an optional convenience
+helper (e.g. a `goTo(floor)` that returns the right MOVE/STOP for you) so a
+beginner can express intent in one line, then graduate to raw commands. There is
+still only **one** core API; the helper is sugar on top, documented in the panel.
+
+**The teaching arc in three reference algorithms** (used internally to set
+scoring "par"; shown to the player only as opt-in, earned spoilers — after a
+level is cleared or via an explicit "show me one approach" action — never as a
+default starter and never as the content of a hint):
+
+1. **FCFS** — serve hall calls in arrival order. Simple, obviously fair, slow.
+2. **SCAN / LOOK** — keep going one direction, serving every call along the way,
+   reverse when there's nothing further ahead. The classic elevator algorithm.
+3. **Destination-aware / multi-car dispatch** — assign calls to cars to minimize
+   expected wait; the late-game target.
+
+---
+
+## 5. Technical architecture
+
+All client-side. Four cooperating parts:
+
+```
+┌───────────────────────────── Main thread (UI) ──────────────────────────────┐
+│  Code editor (CodeMirror)   Controls (run/pause/step/speed)   Results panel  │
+│            │                          │                            ▲         │
+│            ▼                          ▼                            │         │
+│      Worker harness  ──────►  Simulation engine  ──────►  Canvas renderer    │
+│      (load + watchdog)        (deterministic, tick loop)   (decoupled fps)   │
+└──────────────────────────────────────┬───────────────────────────────────────┘
+                                        │ postMessage (code in, commands out)
+                                ┌───────▼────────┐
+                                │  Web Worker     │  ← player's algorithm runs here
+                                │  (sandbox)      │
+                                └─────────────────┘
+```
+
+**User code runs in a Web Worker.** This is the key safety/architecture
+decision, for three reasons:
+
+1. **Isolation** — the worker has no DOM access, so player code can't touch the
+   page or cheat by reading engine internals.
+2. **Interruptibility** — JavaScript can't interrupt its own infinite loop, but
+   the main thread *can* `worker.terminate()`. A watchdog enforces a per-tick
+   time budget and an overall run budget; on timeout the run ends and the player
+   sees "your code timed out" instead of a frozen tab.
+3. **Responsiveness** — headless scoring can run flat-out in the worker without
+   janking the UI.
+
+Player code is injected into the worker (via a Blob URL or `postMessage` +
+`new Function`) and invoked through a thin protocol: main thread sends
+`{seed, config}` and per-tick `state`; the worker replies with commands. To keep
+the per-tick round-trip cheap, the engine can also hand the worker the level and
+let it run the whole simulation, reporting back a command log for replay — decide
+this once profiling shows whether message overhead matters.
+
+**Code editor: CodeMirror 6, vendored locally.** Commit a prebuilt ESM bundle to
+the repo — no CDN, no build step — so the editor loads offline and the game keeps
+working with no connection. It's small, has a solid JavaScript mode, and sits
+behind a thin wrapper so it stays swappable. Monaco (VS Code's editor) is the
+alternative if full IntelliSense becomes a priority later — but it's heavy and
+wants a bundler, so it's a Phase-7 consideration, not now.
+
+**Simulation engine.** Plain ES module, no DOM dependency, so it runs in the
+worker, in the main thread, and in tests. Owns the tick loop, seeded passenger
+generation, command resolution, physics, and metric collection. Deterministic by
+construction.
+
+**Renderer.** Canvas 2D. Draws the shaft(s), the car(s), floor labels, and
+waiting passengers as simple shapes/sprites. Render loop runs on
+`requestAnimationFrame` and is **decoupled** from sim ticks: it interpolates
+between tick states for smooth motion and supports 1×/2×/4×/max speed and a
+single-step button. The renderer reads simulation state; it never feeds back
+into it.
+
+**Persistence: `localStorage`.** Stores progress (which levels are unlocked),
+best stars + best metrics per level, and the player's last code per level so work
+is never lost. Level definitions live as JS/JSON data modules in the repo.
+
+**Suggested file layout:**
+
+```
+/elevator-game
+  index.html
+  /src
+    main.js              # wires UI, editor, engine, renderer together
+    /engine
+      simulation.js      # tick loop, command resolution, physics
+      passengers.js      # seeded traffic generation
+      metrics.js         # wait/journey/throughput/energy collection
+      rng.js             # seeded PRNG
+    /sandbox
+      worker.js          # runs player code; the API surface
+      harness.js         # spawn worker, watchdog/timeout, messaging
+    /render
+      renderer.js        # Canvas drawing + interpolation
+    /game
+      levels.js          # level definitions (data)
+      scoring.js         # composite score + star thresholds
+      progress.js        # localStorage read/write
+      ui.js              # panels, controls, results screen
+    /reference
+      fcfs.js  look.js   # built-in algorithms (par + hints + examples)
+  /test
+    simulation.test.js   # deterministic engine tests
+```
+
+---
+
+## 6. Scoring and evaluation
+
+A run is scored on metrics the player can see and reason about:
+
+| Metric | Meaning | Why it's there |
+|---|---|---|
+| **Avg wait** | hall call → pickup, averaged | core responsiveness |
+| **Avg journey** | request → drop-off, averaged | end-to-end experience |
+| **Max wait** | worst single wait | catches starvation |
+| **Throughput** | passengers delivered in the time limit | did it keep up? |
+| **Distance / energy** | total floors traveled | efficiency, the late-game lever |
+| **Delivered all?** | pass/fail gate | a run that strands people can't 3-star |
+
+These combine into a single **composite score** via per-level weights (early
+levels weight wait time; later levels add energy). Lower-is-better metrics are
+normalized against the level's reference performance so the composite is
+comparable across levels.
+
+**Stars (the primary signal).** Three tiers, anchored to the built-in reference
+algorithms rather than arbitrary numbers:
+
+- ★ — beats naive FCFS (and delivers everyone). Clears the level.
+- ★★ — roughly matches a good LOOK implementation.
+- ★★★ — meets or beats the reference "par," the tuned target for the level.
+
+**Fairness — score across multiple seeds.** Every scoring run executes the same
+algorithm against several fixed seeds (e.g. 5) and averages. This stops players
+from overfitting to one lucky passenger sequence and rewards genuinely general
+algorithms — itself a worthwhile lesson.
+
+**Milestone to advance:** earning ≥ 1★ unlocks the next level. Stars accumulate
+and can gate later "worlds" (e.g. multi-elevator levels need N total stars),
+giving completionists a reason to revisit and optimize.
+
+**Alternatives considered** (stars chosen as primary for legibility, but these
+can layer on):
+
+- **Par / golf** — show a target number per metric ("par: 14-tick avg wait");
+  pairs naturally with stars and makes the goal concrete.
+- **Percentile vs. a built-in bot** — "you beat the LOOK bot by 12%."
+- **Ghost replay sharing** — since there's no server, encode a run/seed in a URL
+  so players can challenge each other without a leaderboard backend.
+- **Letter grades** — cosmetic alternative to stars; same underlying score.
+
+Recommendation: **stars as the headline, with the underlying metric breakdown
+and a par target always visible.** A teaching tool should never show only a
+score — it should show *why*.
+
+---
+
+## 7. Teaching feedback (the pedagogy payload)
+
+What separates this from a generic coding puzzle is the post-run feedback:
+
+- **Metric breakdown vs. par** — show each metric next to the target, with the
+  weak one highlighted, so the player knows *what* to fix.
+- **Visual flags during the run** — a passenger whose wait crosses a threshold
+  turns from yellow to red; the player sees starvation happen.
+- **Targeted hints (tiered, never the answer)** — pattern-detect common mistakes
+  from the run trace and nudge in tiers: restate the goal/concept, then point at
+  the specific symptom in their run, then name the technique. E.g. "your
+  elevator passed a waiting passenger heading the same direction — look up the
+  LOOK algorithm," or "you reversed direction with calls still ahead."
+- **Replayable runs** — let the player re-watch the exact run that produced a
+  score, at any speed, to debug behavior visually.
+- **Worked reference algorithms (spoiler-gated)** — the naive FCFS baseline may
+  be offered as a starting strawman so nobody faces a blank page, but the solving
+  algorithms (LOOK and beyond) stay behind an opt-in, earned spoiler: revealed
+  only after the level is cleared or via an explicit "show me one approach"
+  action — never loaded by default.
+
+All of this feedback is computed locally from the deterministic run trace — no
+network or AI required. Build it behind a clean feedback interface, though, so a
+later, optional, bring-your-own-key generative provider (see `CLAUDE.md`) can
+slot in to add plain-English run explanations and richer prose without touching
+the engine or the local analyzer. That layer is never bundled and never required
+to play or to receive core feedback.
+
+---
+
+## 8. Level progression
+
+One new idea per level; each level's twist is chosen to break the strategy that
+won the previous one.
+
+| Lvl | Setup | New concept | Why the old strategy breaks |
+|---|---|---|---|
+| 1 | 1 car, 5 floors, light random traffic | the loop; basic dispatch | (intro — FCFS clears it) |
+| 2 | 1 car, 10 floors, moderate traffic | sweeping (SCAN/LOOK) | FCFS thrashes up and down |
+| 3 | 1 car, up-peak (lobby → up) | directionality, batching | naive sweep wastes the down trip |
+| 4 | 1 car, mixed up/down | serving both directions, anti-starvation | one-direction bias strands people |
+| 5 | 1 car, small capacity, bursty | load management, return trips | car fills; you must leave people |
+| 6 | 2 cars, independent calls | coordination / assignment | both cars chase the same call |
+| 7 | 2–3 cars, tall building | zoning / express / destination dispatch | naive assignment idles cars |
+| 8 | multi-car + rush + capacity | holistic optimization | everything at once |
+| 9+ | curveballs | priority/VIP calls, out-of-service floor, energy budget, random surges | forces robustness |
+
+Levels are data (`levels.js`): floor count, car count, capacity, traffic
+profile + seeds, scoring weights, and star thresholds. Adding a level is editing
+data, not code — important for iterating on difficulty.
+
+**Tuning note:** every level needs a reference solution run to set honest star
+thresholds. Build the level, run FCFS/LOOK/par against it, and derive thresholds
+from those numbers. This is why the reference algorithms (§4) are infrastructure,
+not just examples.
+
+---
+
+## 9. Build roadmap
+
+Phased so there's a runnable, testable artifact at every step. Each phase has a
+definition of done (DoD).
+
+**Phase 0 — Project setup.** Repo, file layout, `index.html`, ES-module loading,
+a tiny dev server for local testing.
+*DoD:* blank Canvas renders, modules load with no build step.
+
+**Phase 1 — Simulation core (headless).** Domain model, fixed-tick engine,
+seeded passenger generation, command resolution, metric collection, plus the
+built-in FCFS reference controller and unit tests.
+*DoD:* run a level headless and print deterministic metrics; tests pass on repeat
+runs with the same seed.
+
+**Phase 2 — Visualization.** Canvas renderer for shaft/car/passengers,
+interpolated animation decoupled from ticks, run/pause/step/speed controls.
+*DoD:* watch the FCFS reference drive a level at adjustable speed.
+
+**Phase 3 — Player code + sandbox.** CodeMirror editor, Web Worker harness with
+timeout watchdog, the algorithm API, and error/warning surfacing to the UI.
+*DoD:* write a controller in the editor, run it, see it drive the car; infinite
+loops are caught and reported, not fatal.
+
+**Phase 4 — Scoring + stars.** Composite score, multi-seed scoring runs, star
+thresholds from reference algorithms, results screen with the metric breakdown
+and feedback.
+*DoD:* finish a level and get accurate, reproducible stars with a par comparison.
+
+**Phase 5 — Progression + persistence.** Level select, unlock logic,
+`localStorage` for progress / best stars / per-level code.
+*DoD:* progress and saved code survive a reload; levels unlock on ≥ 1★.
+
+**Phase 6 — Content + polish.** The full level set (including multi-elevator),
+an onboarding tutorial, the docs panel (API reference + starter + reference
+algorithms), hints, and visual polish.
+*DoD:* a new player can go from level 1 to the end with in-game guidance only.
+
+**Phase 7 — Stretch.** Ghost/replay URL sharing, A/B compare two algorithms
+side by side, daily-seed challenge, visual themes, optional Monaco editor, and an
+optional bring-your-own-key generative feedback provider behind the feedback
+interface (additive prose only — never required, never bundled).
+
+---
+
+## 10. Risks and open questions
+
+- **Infinite-loop / runaway code** — mitigated by the Worker + watchdog, but
+  needs real testing (tight loops, `while(true)`, huge allocations). Validate
+  early in Phase 3.
+- **Overfitting to seeds** — multi-seed scoring helps; may also want to hide the
+  exact scoring seeds and show only practice seeds.
+- **API ergonomics** — the `step`/command contract should get in front of a real
+  learner ASAP (end of Phase 3). Awkwardness here undermines the whole tool.
+- **Difficulty tuning** — depends entirely on good reference solutions per level;
+  budget time for this in Phase 6.
+- **Movement-model edge cases** — mid-shaft commitment, door-timing during
+  direction changes, simultaneous arrivals. Nail these in Phase 1 tests.
+- **Message-passing overhead** — per-tick main↔worker chatter could dominate at
+  max speed; if so, switch to "run the whole sim in the worker, return a command
+  log." Decide with a profile, not a guess.
+- **Scope creep on multi-elevator** — the array-of-elevators API from day one is
+  the hedge; resist adding car features until the single-car game is fun.
+
+---
+
+## 11. Stack summary
+
+- **Runtime:** HTML5 + Canvas 2D, vanilla ES modules. No framework.
+- **Editor:** CodeMirror 6, vendored locally (prebuilt ESM bundle in-repo, no
+  CDN). Monaco optional, later.
+- **Sandbox:** Web Workers + main-thread timeout watchdog.
+- **Persistence:** `localStorage`; levels and content as data modules.
+- **Tests:** plain assertions over the deterministic engine (run in Node or the
+  browser); no heavy framework required.
+- **Feedback:** local, rule-based analyzer over the deterministic run trace;
+  optional bring-your-own-key generative provider behind a clean interface,
+  later (never bundled, never required).
+- **Hosting:** any static host (GitHub Pages, Netlify, etc.). No server-side
+  process.
+```

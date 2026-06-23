@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Elevator Algorithm Game</title>
+    <style>
+      :root { --bg:#0f1419; --panel:#1b232d; --ink:#e6edf3; --muted:#9aa7b2; --accent:#4cc2ff; --line:#2b3742; }
+      * { box-sizing: border-box; }
+      body { margin:0; font:15px/1.5 -apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--ink); }
+      header { padding:14px 20px; border-bottom:1px solid var(--line); }
+      header h1 { font-size:17px; margin:0; }
+      header p { margin:2px 0 0; color:var(--muted); font-size:13px; }
+      #level-bar { display:flex; gap:8px; padding:12px 20px 0; }
+      #level-bar button { background:var(--panel); color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:6px 12px; cursor:pointer; }
+      #level-bar button.active { border-color:var(--accent); color:var(--accent); }
+      main { display:grid; grid-template-columns: 1fr 1fr; gap:16px; padding:16px 20px; align-items:start; }
+      .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px; }
+      h2 { font-size:16px; margin:0 0 8px; }
+      dl.brief { display:grid; grid-template-columns:max-content 1fr; gap:4px 14px; margin:10px 0 0; }
+      dl.brief dt { color:var(--accent); font-weight:600; }
+      dl.brief dd { margin:0; }
+      .situation { color:var(--muted); }
+      textarea { width:100%; height:320px; background:#0c1116; color:#d7e2ec; border:1px solid var(--line); border-radius:8px; padding:12px; font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; resize:vertical; }
+      .controls { display:flex; gap:8px; margin-top:10px; }
+      button.primary { background:var(--accent); color:#04222f; border:0; border-radius:6px; padding:9px 18px; font-weight:600; cursor:pointer; }
+      button.ghost { background:transparent; color:var(--muted); border:1px solid var(--line); border-radius:6px; padding:9px 14px; cursor:pointer; }
+      .results { }
+      .stars { font-size:30px; letter-spacing:4px; color:var(--accent); }
+      table.metrics { width:100%; border-collapse:collapse; margin:10px 0; }
+      table.metrics th, table.metrics td { text-align:left; padding:4px 8px; border-bottom:1px solid var(--line); }
+      table.metrics th { color:var(--muted); font-weight:500; }
+      .feedback { background:#10242e; border-left:3px solid var(--accent); padding:10px 12px; border-radius:4px; }
+      .results.error pre, .warnings pre { white-space:pre-wrap; color:#ffb4a8; font:12px/1.4 ui-monospace,monospace; }
+      .hint, .best { color:var(--muted); }
+      .canvas-stub { margin-top:14px; border:1px dashed var(--line); border-radius:8px; padding:24px; text-align:center; color:var(--muted); font-size:13px; }
+      .note { padding:0 20px 24px; color:var(--muted); font-size:12px; }
+      code { background:#0c1116; padding:1px 5px; border-radius:4px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Elevator Algorithm Game</h1>
+      <p>Write the brain that runs the elevator. Run it, read the feedback, make riders wait less.</p>
+    </header>
+
+    <div id="level-bar"></div>
+
+    <main>
+      <section class="panel">
+        <div id="brief"></div>
+        <div class="canvas-stub">Live simulation view arrives in Phase 2. For now, run your code to see the numbers.</div>
+      </section>
+
+      <section class="panel">
+        <textarea id="editor" spellcheck="false" aria-label="Your algorithm"></textarea>
+        <div class="controls">
+          <button id="run" class="primary">Run</button>
+          <button id="reset" class="ghost">Reset to starter</button>
+        </div>
+        <div id="results" style="margin-top:14px"></div>
+      </section>
+    </main>
+
+    <p class="note">
+      Runs entirely in your browser — no server, no network. Your code is scored locally across several fixed seeds.
+      (Foundation build: code currently runs on the main thread; the Web Worker sandbox lands in Phase 3.)
+    </p>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
