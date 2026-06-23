@@ -8,7 +8,8 @@
 import { gallery } from '../src/reference/gallery.js';
 import { compileController } from '../src/sandbox/compile.js';
 import { runSimulation } from '../src/engine/simulation.js';
-import { getLevel } from '../src/game/levels.js';
+import { scoreLevel } from '../src/game/scoring.js';
+import { getLevel, levels } from '../src/game/levels.js';
 
 let passed = 0;
 let failed = 0;
@@ -58,12 +59,25 @@ const L2 = getLevel('l2');
   assert(allMatch, 'each `source` recompiles to the same behavior as its createController (no drift)');
 }
 
-// --- 4. Every reference delivers everyone (a reference must actually work) ---
+// --- 4. Every reference delivers everyone on EVERY level (refs must work) ----
 {
-  for (const g of gallery) {
-    const okL1 = L1.seeds.every((s) => runSimulation(L1, s, g.createController).metrics.deliveredAll);
-    const okL2 = L2.seeds.every((s) => runSimulation(L2, s, g.createController).metrics.deliveredAll);
-    assert(okL1 && okL2, `${g.id} delivers everyone on L1 and L2 (all seeds)`);
+  for (const L of levels) {
+    for (const g of gallery) {
+      const ok = L.seeds.every((s) => runSimulation(L, s, g.createController).metrics.deliveredAll);
+      assert(ok, `${g.id} delivers everyone on ${L.id} (all seeds)`);
+    }
+  }
+}
+
+// --- 4b. Par is sane on every level: FCFS clears (>=1 star) and is beaten by ---
+// LOOK (3 stars), so the 1-star baseline and 3-star par bracket every level.
+{
+  for (const L of levels) {
+    const fcfs = scoreLevel(L, gallery.find((g) => g.id === 'fcfs').createController);
+    const look = scoreLevel(L, gallery.find((g) => g.id === 'look').createController);
+    assert(fcfs.stars >= 1, `${L.id}: FCFS clears the level (>= 1 star)`);
+    assert(look.stars === 3, `${L.id}: LOOK reaches par (3 stars)`);
+    assert(fcfs.composite > look.composite, `${L.id}: FCFS composite is worse than LOOK (meaningful par)`);
   }
 }
 

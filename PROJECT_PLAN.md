@@ -12,9 +12,9 @@ it across increasingly hard levels. Everything runs client-side — no server.
   weight (e.g. the code editor). No build step, no framework, no server-side
   process. Runs offline; deploys as static files.
 - **Status:** Phases 0–5 complete (engine, scoring/stars, visualization, sandbox +
-  editor, reference gallery, progression + persistence). Next: Phase 6 — content
-  + polish (the full level set, onboarding, hints). This document is the spec the
-  build follows.
+  editor, reference gallery, progression + persistence). In progress: Phase 6 —
+  the level curriculum (taller buildings, multiple elevators, zoned skyscrapers,
+  hotel traffic), landing as staged PRs. This document is the spec the build follows.
 
 ---
 
@@ -454,9 +454,15 @@ badges and lock state, unlock logic (a level opens once the previous earns ≥ 1
 toast, and resuming the last-played level on reload.
 *DoD met:* progress and saved code survive a reload; levels unlock on ≥ 1★.
 
-**Phase 6 — Content + polish.** The full level set (including multi-elevator),
-an onboarding tutorial, the docs panel (API reference + starter + reference
-algorithms), hints, and visual polish.
+**Phase 6 — Content + polish. 🚧 IN PROGRESS.** The full level set, then onboarding,
+the docs panel, hints, and visual polish. Levels land in staged PRs:
+- **6A (done):** single-car curriculum — L3 up-peak, L4 hotel traffic, L5 small
+  capacity, L6 tall high-rise (18 floors); adds the `hotel` spawn type.
+- **6B:** multiple elevators — coordination levels + N-car-aware reference
+  controllers (today's references drive only car 0) + a multi-car starter.
+- **6C:** zoned skyscraper — an elevator serves a floor subset; riders transfer at
+  a sky-lobby (engine range/transfer model + renderer zone shading).
+- later: onboarding tutorial, docs panel, tiered hints, polish.
 *DoD:* a new player can go from level 1 to the end with in-game guidance only.
 
 **Phase 7 — Stretch.** Ghost/replay URL sharing, A/B compare two algorithms

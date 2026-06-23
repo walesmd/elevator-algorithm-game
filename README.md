@@ -46,13 +46,18 @@ What works today:
   previous earns ≥ 1★, with a "level unlocked" toast. Best stars, your code per
   level, and the last-played level are saved to `localStorage`, so progress
   survives a reload and you resume where you left off.
+- A growing **level curriculum** (`src/game/levels.js`): six single-car levels so
+  far — getting moving, sweeping (SCAN/LOOK), morning up-peak, hotel (lobby-centric)
+  traffic, a tight-capacity crush, and an 18-floor high-rise — each isolating one
+  scheduling idea, with traffic shapes `uniform` / `up-peak` / `down-peak` / `hotel`.
 - A full play loop: read the brief, edit the algorithm, Run, watch it, read the
   metrics + feedback, and advance through unlocking levels.
 - Passing headless tests (`simulation`, `recording`, `phase3`, `references`,
   `progression`).
 
-Not yet built (later phases): the full level set (incl. multi-elevator), an
-onboarding tutorial, and tiered hints.
+Not yet built: multiple-elevator levels (+ multi-car-aware references), zoned
+"skyscraper" levels where riders transfer at a sky-lobby, an onboarding tutorial,
+and tiered hints.
 
 ## Run it
 

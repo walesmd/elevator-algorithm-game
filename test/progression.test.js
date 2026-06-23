@@ -29,7 +29,12 @@ const starsFrom = (map) => (id) => map[id] || 0;
   assert(isUnlocked(levels, l2.id, threeStar), 'more stars on level 1 keeps level 2 unlocked');
 
   assert(unlockedCount(levels, none) === 1, 'with no progress, exactly one level is open');
-  assert(unlockedCount(levels, oneStar) === levels.length, 'clearing level 1 opens all current levels');
+  // Clearing level 1 opens the NEXT level only — the ladder unlocks one rung at a
+  // time (don't assume the total level count).
+  assert(unlockedCount(levels, oneStar) === Math.min(2, levels.length), 'clearing level 1 opens exactly the next level');
+  if (levels.length >= 3) {
+    assert(!isUnlocked(levels, levels[2].id, oneStar), 'level 3 stays locked until level 2 is cleared');
+  }
 }
 
 // --- A longer synthetic ladder: unlocks chain one at a time -----------------

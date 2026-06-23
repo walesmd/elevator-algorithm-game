@@ -81,6 +81,7 @@ function avgOver(level, factory, key) {
     L2,
     { numFloors: 5, spawn: { type: 'up-peak', count: 60, firstTick: 0, lastTick: 200, lobbyBias: 0.7 }, timeLimit: 1000 },
     { numFloors: 10, spawn: { type: 'down-peak', count: 60, firstTick: 0, lastTick: 300, lobbyBias: 0.7 }, timeLimit: 2000 },
+    { numFloors: 12, spawn: { type: 'hotel', count: 60, firstTick: 0, lastTick: 400, lobbyBias: 0.9 }, timeLimit: 2000 },
     { numFloors: 2, spawn: { type: 'uniform', count: 40, firstTick: 0, lastTick: 100 }, timeLimit: 500 },
   ];
   let sameFloor = 0;
@@ -94,6 +95,22 @@ function avgOver(level, factory, key) {
     }
   }
   assert(sameFloor === 0, `no passenger has origin === dest across all spawn types (checked ${total})`);
+}
+
+// --- 2c. Hotel traffic is lobby-centric -------------------------------------
+{
+  const L = { numFloors: 12, spawn: { type: 'hotel', count: 100, firstTick: 0, lastTick: 400, lobbyBias: 0.9 }, timeLimit: 2000 };
+  let lobbyTrips = 0;
+  let n = 0;
+  for (let seed = 1; seed <= 20; seed++) {
+    for (const p of generatePassengers(L, seed)) {
+      n++;
+      if (p.origin === 0 || p.dest === 0) lobbyTrips++;
+    }
+  }
+  // With lobbyBias 0.9, the vast majority of trips touch the lobby (allow slack
+  // for the occasional floor-to-floor hop, which can also incidentally hit 0).
+  assert(lobbyTrips / n > 0.8, `hotel traffic is lobby-centric (${Math.round((100 * lobbyTrips) / n)}% touch the lobby)`);
 }
 
 // --- 3. Simulation determinism ---------------------------------------------

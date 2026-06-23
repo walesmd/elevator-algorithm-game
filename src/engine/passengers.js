@@ -9,6 +9,8 @@
 //   - 'uniform'  : origins and destinations spread across all floors.
 //   - 'up-peak'  : most riders start in the lobby (floor 0) heading up.
 //   - 'down-peak': most riders head down toward the lobby.
+//   - 'hotel'    : lobby-centric — most riders go lobby->room or room->lobby (either
+//                  direction), and only rarely between two upper floors.
 // Add new shapes here as data-driven cases; nothing else needs to change.
 
 import { mulberry32, randInt } from './rng.js';
@@ -41,6 +43,17 @@ export function generatePassengers(level, seed) {
     } else if (spawn.type === 'down-peak') {
       dest = rng() < lobbyBias ? 0 : randInt(rng, numFloors);
       origin = dest === 0 ? 1 + randInt(rng, numFloors - 1) : pickOther(rng, numFloors, dest);
+    } else if (spawn.type === 'hotel') {
+      // Lobby-centric both ways: with probability lobbyBias the trip touches the
+      // lobby (50/50 lobby->room vs room->lobby); otherwise a rare room-to-room hop.
+      if (rng() < lobbyBias) {
+        const room = 1 + randInt(rng, numFloors - 1);
+        if (rng() < 0.5) { origin = 0; dest = room; }
+        else { origin = room; dest = 0; }
+      } else {
+        origin = randInt(rng, numFloors);
+        dest = pickOther(rng, numFloors, origin);
+      }
     } else {
       origin = randInt(rng, numFloors);
       dest = pickOther(rng, numFloors, origin);
