@@ -33,9 +33,38 @@
       .feedback { background:#10242e; border-left:3px solid var(--accent); padding:10px 12px; border-radius:4px; }
       .results.error pre, .warnings pre { white-space:pre-wrap; color:#ffb4a8; font:12px/1.4 ui-monospace,monospace; }
       .hint, .best { color:var(--muted); }
-      .canvas-stub { margin-top:14px; border:1px dashed var(--line); border-radius:8px; padding:24px; text-align:center; color:var(--muted); font-size:13px; }
       .note { padding:0 20px 24px; color:var(--muted); font-size:12px; }
       code { background:#0c1116; padding:1px 5px; border-radius:4px; }
+
+      /* --- Phase 2: live simulation view --- */
+      .stage { margin-top:14px; }
+      .stage-wrap { position:relative; height:380px; background:#0a0f14; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+      #stage { width:100%; height:100%; display:block; }
+      .stage-empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; color:var(--muted); font-size:13px; text-align:center; padding:0 24px; }
+      .hud { display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:8px; font:12px/1 ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--muted); }
+      /* The `hidden` attribute must win over the display rules above. */
+      .stage-empty[hidden], .hud[hidden] { display:none; }
+      .hud b { color:var(--ink); font-weight:600; }
+      .hud .viz-seed { color:var(--accent); }
+      .playback { display:flex; align-items:center; gap:8px; margin-top:10px; flex-wrap:wrap; }
+      .playback button { background:var(--panel); color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:6px 11px; cursor:pointer; font-size:13px; }
+      .playback button:hover:not(:disabled) { border-color:var(--accent); }
+      .playback button:disabled { opacity:.4; cursor:default; }
+      .playback button.pp { min-width:74px; }
+      .speeds { display:inline-flex; border:1px solid var(--line); border-radius:6px; overflow:hidden; }
+      .speeds button { border:0; border-radius:0; border-left:1px solid var(--line); padding:6px 9px; }
+      .speeds button:first-child { border-left:0; }
+      .speeds button.active { background:var(--accent); color:#04222f; }
+      .scrub-row { display:flex; align-items:center; gap:8px; margin-top:8px; }
+      #scrub { flex:1; accent-color:var(--accent); }
+      #tick-label { color:var(--muted); font:12px/1 ui-monospace,monospace; min-width:96px; text-align:right; }
+      .legend { display:flex; gap:14px; margin-top:8px; color:var(--muted); font-size:11px; flex-wrap:wrap; }
+      .legend span::before { content:''; display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:5px; vertical-align:middle; }
+      .legend .ok::before { background:#74b6cf; }
+      .legend .warn::before { background:#ffcf6b; }
+      .legend .red::before { background:#ff5d52; }
+      .legend-glyphs { color:var(--muted); font-size:11px; margin:4px 0 0; }
+      .legend-glyphs .cc { color:var(--accent); }
     </style>
   </head>
   <body>
@@ -49,7 +78,41 @@
     <main>
       <section class="panel">
         <div id="brief"></div>
-        <div class="canvas-stub">Live simulation view arrives in Phase 2. For now, run your code to see the numbers.</div>
+        <div class="stage">
+          <div class="stage-wrap">
+            <canvas id="stage"></canvas>
+            <div id="stage-empty" class="stage-empty">Press <b>&nbsp;Run&nbsp;</b> to watch your algorithm drive the building.</div>
+          </div>
+          <div class="hud" id="hud" hidden>
+            <span class="viz-seed" id="hud-seed"></span>
+            <span>t=<b id="hud-time">0</b></span>
+            <span>delivered <b id="hud-delivered">0</b>/<b id="hud-total">0</b></span>
+            <span>riding <b id="hud-riding">0</b></span>
+            <span>waiting <b id="hud-waiting">0</b></span>
+            <span>distance <b id="hud-distance">0</b></span>
+          </div>
+          <div class="playback">
+            <button id="pp" class="pp" disabled>▶ Play</button>
+            <button id="step" title="Advance one tick" disabled>Step ›</button>
+            <button id="restart" title="Back to the start" disabled>↺ Restart</button>
+            <span class="speeds" role="group" aria-label="Playback speed">
+              <button data-speed="1" class="active" aria-pressed="true">1×</button>
+              <button data-speed="2" aria-pressed="false">2×</button>
+              <button data-speed="4" aria-pressed="false">4×</button>
+              <button data-speed="32" aria-pressed="false">Max</button>
+            </span>
+          </div>
+          <div class="scrub-row">
+            <input type="range" id="scrub" min="0" max="0" value="0" step="1" disabled aria-label="Scrub through the run" />
+            <span id="tick-label">— / —</span>
+          </div>
+          <div class="legend">
+            <span class="ok">waiting</span>
+            <span class="warn">waited a while</span>
+            <span class="red">waited too long</span>
+          </div>
+          <p class="legend-glyphs">▲ ▼ which way a rider wants to go · <span class="cc">▸</span> a stop the car is planning</p>
+        </div>
       </section>
 
       <section class="panel">

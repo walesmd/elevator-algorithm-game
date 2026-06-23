@@ -38,10 +38,16 @@ export function runSimulation(level, seed, createController, opts = {}) {
   const doorTicks = level.doorTicks ?? 2;
   const timeLimit = level.timeLimit ?? 600;
   const wantTrace = !!opts.trace;
+  // Recording captures a full visual snapshot of the world every tick so the
+  // renderer can replay the run (smoothly, decoupled from ticks) without re-running
+  // the controller. It's opt-in because the headless scoring path never needs it
+  // and stays fast; determinism is untouched — frames are pure functions of state.
+  const wantRecord = !!opts.record;
 
   const passengers = generatePassengers(level, seed);
   const warnings = [];
   const trace = [];
+  const frames = [];
 
   let controller;
   try {
@@ -143,11 +149,48 @@ export function runSimulation(level, seed, createController, opts = {}) {
       if (wantTrace) trace.push({ t: time, elevator: i, floor: el.floor, action });
     });
 
+    // 6) Record the end-of-tick world for replay (after commands have taken effect:
+    //    a STOP shows open doors and updated load; a MOVE has begun advancing pos).
+    if (wantRecord) {
+      frames.push(recordFrame(time, elevators, waiting, capacity, ticksPerFloor, delivered, total, distance));
+    }
+
     time++;
   }
 
   const metrics = summarize({ passengers, distance, endTick: time, timeLimit });
-  return { metrics, trace, warnings, passengers };
+  return { metrics, trace, warnings, passengers, frames };
+}
+
+// One frame = the renderable state of the whole building at the end of a tick.
+// Everything is copied to primitives (no references into live passenger/elevator
+// objects) so later mutation can't corrupt an earlier frame. `pos` is a continuous
+// floor coordinate: while a car is mid-travel it sits partway between floors, which
+// is what lets the renderer interpolate smooth motion instead of teleporting.
+function recordFrame(time, elevators, waiting, capacity, ticksPerFloor, delivered, total, distance) {
+  let riding = 0;
+  const evs = elevators.map((el) => {
+    const progress = el.travelRemaining > 0 ? (ticksPerFloor - el.travelRemaining) / ticksPerFloor : 0;
+    riding += el.onboard.length;
+    return {
+      index: el.index,
+      floor: el.floor,
+      pos: el.floor + el.pendingDir * progress,
+      dir: el.direction,
+      doorOpen: el.doors === 'open' ? 1 : 0,
+      load: el.onboard.length,
+      capacity,
+      carCalls: [...new Set(el.onboard.map((p) => p.dest))].sort((a, b) => a - b),
+    };
+  });
+  const waitingSnapshot = waiting.map((p) => ({
+    id: p.id,
+    floor: p.origin,
+    dest: p.dest,
+    dir: p.dest > p.origin ? 'up' : 'down',
+    wait: time - p.spawnTick,
+  }));
+  return { t: time, delivered, total, distance, riding, elevators: evs, waiting: waitingSnapshot };
 }
 
 function startMove(el, dir, ticksPerFloor) {
