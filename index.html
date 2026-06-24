@@ -4,6 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Elevator Algorithm Game</title>
+    <meta name="description" content="Learn algorithmic thinking by writing the JavaScript brain that dispatches elevators. Runs entirely in your browser — no server, no network." />
+    <!-- Inline SVG favicon (an elevator) so the tab icon works fully offline, no asset request. -->
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='88'%3E%F0%9F%9B%97%3C/text%3E%3C/svg%3E" />
     <style>
       :root { --bg:#0f1419; --panel:#1b232d; --ink:#e6edf3; --muted:#9aa7b2; --accent:#4cc2ff; --line:#2b3742; }
       * { box-sizing: border-box; }
@@ -28,7 +31,19 @@
       @media (prefers-reduced-motion: reduce) {
         .toast, .toast.show { transition:opacity .15s; transform:translateX(-50%); }
       }
-      main { display:grid; grid-template-columns: 1fr 1fr; gap:16px; padding:16px 20px; align-items:start; }
+      /* Desktop: brief over the building on the left, the editor/results on the right
+         (spanning both rows). Areas let mobile re-flow to brief -> editor -> building. */
+      main { display:grid; grid-template-columns: 1fr 1fr; gap:16px; padding:16px 20px; align-items:start;
+             grid-template-areas: "brief work" "stage work"; }
+      .brief-panel { grid-area: brief; }
+      .work-panel  { grid-area: work; }
+      .stage-panel { grid-area: stage; }
+      /* Grid/flex items default to min-width:auto, which refuses to shrink below their
+         content's intrinsic width — that's what let the long code lines push the whole
+         page wider than a phone screen. Allowing them to shrink makes the inner
+         overflow:auto regions (the editor, the comparison table) scroll instead. */
+      main > section { min-width: 0; }
+      .cm-wrap { min-width: 0; }
       .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px; }
       h2 { font-size:16px; margin:0 0 8px; }
       dl.brief { display:grid; grid-template-columns:max-content 1fr; gap:4px 14px; margin:10px 0 0; }
@@ -128,6 +143,22 @@
       table.cmp tr.cmp-undelivered td { opacity:.5; }
       .cmp-mark { color:#7fd6a8; font-weight:700; }
       .cmp-watch { padding:3px 9px; font-size:12px; }
+
+      /* --- Responsive: stack to a single column on narrow screens so the editor and
+             building stop fighting over width (below this they'd overflow the page). --- */
+      @media (max-width: 880px) {
+        /* One column, re-flowed so you read the brief, then write, then watch —
+           instead of scrolling past the whole replay panel to reach the editor. */
+        main { grid-template-columns: 1fr; grid-template-areas: "brief" "work" "stage"; gap:14px; padding:14px; }
+        header { padding:12px 14px; }
+        #level-bar { padding:12px 14px 0; }
+        .note { padding:0 14px 20px; }
+      }
+      @media (max-width: 560px) {
+        .cm { height:300px; }
+        .stage-wrap { height:300px; }
+        .stars { font-size:26px; }
+      }
     </style>
   </head>
   <body>
@@ -139,8 +170,20 @@
     <div id="level-bar"></div>
 
     <main>
-      <section class="panel">
+      <section class="panel brief-panel">
         <div id="brief"></div>
+      </section>
+
+      <section class="panel work-panel">
+        <div id="editor" class="cm"></div>
+        <div class="controls">
+          <button id="run" class="primary">Run</button>
+          <button id="reset" class="ghost">Reset to starter</button>
+        </div>
+        <div id="results" style="margin-top:14px"></div>
+      </section>
+
+      <section class="panel stage-panel">
         <div class="stage">
           <div class="stage-wrap">
             <canvas id="stage"></canvas>
@@ -189,15 +232,6 @@
           <div id="gallery-list" class="gallery-list"></div>
           <div id="comparison" class="comparison"></div>
         </details>
-      </section>
-
-      <section class="panel">
-        <div id="editor" class="cm"></div>
-        <div class="controls">
-          <button id="run" class="primary">Run</button>
-          <button id="reset" class="ghost">Reset to starter</button>
-        </div>
-        <div id="results" style="margin-top:14px"></div>
       </section>
     </main>
 
