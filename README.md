@@ -49,19 +49,23 @@ What works today:
   previous earns ≥ 1★, with a "level unlocked" toast. Best stars, your code per
   level, and the last-played level are saved to `localStorage`, so progress
   survives a reload and you resume where you left off.
-- A growing **level curriculum** (`src/game/levels.js`): six single-car levels so
-  far — getting moving, sweeping (SCAN/LOOK), a morning up-peak rush, hotel
-  (lobby-centric) traffic, a sudden surge of calls, and an 18-floor high-rise where
-  distance/energy becomes the headline (LOOK's turn-early sweep vs SCAN's run to the
-  ends). Traffic shapes: `uniform` / `up-peak` / `down-peak` / `hotel`.
+- A growing **level curriculum** (`src/game/levels.js`): nine levels so far. Six
+  single-car ones — getting moving, sweeping (SCAN/LOOK), a morning up-peak rush,
+  hotel (lobby-centric) traffic, a sudden surge of calls, and an 18-floor high-rise
+  where distance/energy becomes the headline (LOOK's turn-early sweep vs SCAN's run
+  to the ends) — then three multiple-elevator ones: a two-car building (drive both),
+  a three-car surge (dispatch the cars so they don't all chase the same call), and a
+  16-floor three-car tower where distance is back on the scoreboard. The reference
+  controllers and starter are N-car aware (a call goes to the best-placed car, then
+  each car runs its own strategy). Traffic shapes: `uniform` / `up-peak` /
+  `down-peak` / `hotel`.
 - A full play loop: read the brief, edit the algorithm, Run, watch it, read the
   metrics + feedback, and advance through unlocking levels.
 - Passing headless tests (`simulation`, `recording`, `phase3`, `references`,
   `progression`).
 
-Not yet built: multiple-elevator levels (+ multi-car-aware references), zoned
-"skyscraper" levels where riders transfer at a sky-lobby, an onboarding tutorial,
-and tiered hints.
+Not yet built: zoned "skyscraper" levels where an elevator serves a floor subset
+and riders transfer at a sky-lobby, an onboarding tutorial, and tiered hints.
 
 ## Run it
 

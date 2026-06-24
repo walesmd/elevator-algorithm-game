@@ -460,8 +460,12 @@ toast, and resuming the last-played level on reload.
 the docs panel, hints, and visual polish. Levels land in staged PRs:
 - **6A (done):** single-car curriculum — L3 up-peak, L4 hotel traffic, L5 small
   capacity, L6 tall high-rise (18 floors); adds the `hotel` spawn type.
-- **6B:** multiple elevators — coordination levels + N-car-aware reference
-  controllers (today's references drive only car 0) + a multi-car starter.
+- **6B (done):** multiple elevators — three coordination levels (L7 two-car
+  "drive both," L8 three-car surge "dispatch the cars," L9 16-floor three-car
+  tower with distance back on the scoreboard); all four reference controllers
+  and the starter are now N-car aware (each waiting call is dispatched to the
+  best-placed car, then each car runs its own strategy) and reduce exactly to
+  the old single-car behavior when `numElevators === 1`.
 - **6C:** zoned skyscraper — an elevator serves a floor subset; riders transfer at
   a sky-lobby (engine range/transfer model + renderer zone shading).
 - later: onboarding tutorial, docs panel, tiered hints, polish.

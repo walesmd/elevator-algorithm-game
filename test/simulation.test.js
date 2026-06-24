@@ -223,6 +223,32 @@ function avgOver(level, factory, key) {
   );
 }
 
+// --- 10. Multiple elevators move independently (Phase 6B) -------------------
+{
+  const L7 = getLevel('l7'); // two cars
+  assert((L7.numElevators ?? 1) === 2, 'Level 7 is a two-car level');
+
+  // The engine applies a separate command to each car: tell both to go up and both
+  // leave the lobby; the trace records an action for each car index.
+  const bothUp = () => ({ step: (s) => s.elevators.map(() => ({ action: 'MOVE_UP' })) });
+  const tr = runSimulation(L7, 1, bothUp, { trace: true }).trace;
+  assert(tr.some((x) => x.elevator === 0 && x.action === 'MOVE_UP'), 'car 0 receives and acts on its command');
+  assert(tr.some((x) => x.elevator === 1 && x.action === 'MOVE_UP'), 'car 1 receives and acts on its own command');
+
+  // Driving only car 0 (idling the rest) wastes capacity: on the three-car surge it
+  // strands riders the full multi-car reference delivers. Proves the extra cars do
+  // real work — the engine isn't quietly serving everyone with car 0 alone.
+  const L8 = getLevel('l8');
+  const car0Only = (cfg) => {
+    const inner = look.createController(cfg);
+    return { step: (s) => inner.step(s).map((c, i) => (i === 0 ? c : { action: 'IDLE' })) };
+  };
+  const fullDelivers = L8.seeds.every((s) => runSimulation(L8, s, look.createController).metrics.deliveredAll);
+  const oneCarStrands = L8.seeds.some((s) => !runSimulation(L8, s, car0Only).metrics.deliveredAll);
+  assert(fullDelivers, 'multi-car LOOK delivers everyone on the three-car level');
+  assert(oneCarStrands, 'running only car 0 strands riders the full car bank delivers (extra cars matter)');
+}
+
 function r1(n) {
   return Math.round(n * 10) / 10;
 }

@@ -27,59 +27,100 @@ export const source = `// LOOK — the real "elevator algorithm" (directional co
 // way as it passes — riders heading the other way wait for the return trip. When
 // there is nothing left ahead it reverses and sweeps back.
 //
+// With more than one car the new question is DISPATCH: who answers which call? If
+// every car chases every call they herd together and waste each other; if one car
+// does all the work the rest sit idle. So first we hand each waiting call to the
+// best-placed car (one already heading that way, soon to pass it), then each car
+// just runs LOOK over the calls assigned to it plus its own drop-offs.
+//
 // Note the \`serving\` field on STOP: it tells the engine which way the car is
 // committed, so only riders going that way board (a down-rider won't step into an
 // up-bound car). Declaring it correctly — especially flipping it at a turnaround —
 // is the heart of running a real elevator.
 function createController(config) {
-  let dir = 1; // +1 = up, -1 = down
+  const dir = Array.from({ length: config.numElevators }, () => 1); // committed direction per car (+1/-1)
 
   return {
     step(state) {
-      const e = state.elevators[0];
-      if (!e.ready) return [{ action: 'IDLE' }];
+      const cars = state.elevators;
 
-      // Floors still worth visiting: drop-offs, plus pick-ups if we have room.
-      const room = e.load < e.capacity;
-      const stops = new Set(e.carCalls);
-      if (room) for (const h of state.hallCalls) stops.add(h.floor);
-      if (stops.size === 0) return [{ action: 'IDLE' }];
-      const workAhead = (d) => [...stops].some((f) => (d > 0 ? f > e.floor : f < e.floor));
-      const heading = dir > 0 ? 'up' : 'down';
-
-      // 1) Serve our COMMITTED direction right here first — let riders off, and board
-      //    riders going our way. (Decide this before any reversal, so we never abandon
-      //    a rider we just arrived for.)
-      const alightHere = e.carCalls.includes(e.floor);
-      const boardHere = room && state.hallCalls.some((h) => h.floor === e.floor && h.direction === heading);
-      if (alightHere || boardHere) return [{ action: 'STOP', serving: heading }];
-
-      // 2) Keep going while there is work ahead in our direction.
-      if (workAhead(dir)) return [{ action: dir > 0 ? 'MOVE_UP' : 'MOVE_DOWN' }];
-
-      // 3) Nothing ahead: reverse. Serve here in the NEW direction (a turnaround
-      //    pickup) or head toward the work behind us.
-      if (workAhead(-dir)) {
-        dir = -dir;
-        const nh = dir > 0 ? 'up' : 'down';
-        if (room && state.hallCalls.some((h) => h.floor === e.floor && h.direction === nh)) {
-          return [{ action: 'STOP', serving: nh }];
-        }
-        return [{ action: dir > 0 ? 'MOVE_UP' : 'MOVE_DOWN' }];
+      // --- Dispatch: assign each waiting hall call to exactly one car ----------
+      // A full car can't take pick-ups. Among the rest, pick the car that would
+      // reach this call soonest: cheapest is a car already heading this way with
+      // the call still ahead of it; pricier is a call it must turn around for.
+      const mine = cars.map(() => []); // hall calls assigned to each car
+      for (const call of state.hallCalls) {
+        let pick = -1;
+        let best = Infinity;
+        cars.forEach((e, i) => {
+          if (e.load >= e.capacity) return;            // no room: can't pick anyone up
+          const cost = reachCost(e, dir[i], call);
+          if (cost < best) { best = cost; pick = i; }
+        });
+        if (pick !== -1) mine[pick].push(call);
       }
 
-      // 4) The only thing left is an opposite-direction call AT this floor: serve it.
-      if (room && state.hallCalls.some((h) => h.floor === e.floor && h.direction === 'up')) {
-        dir = 1;
-        return [{ action: 'STOP', serving: 'up' }];
-      }
-      if (room && state.hallCalls.some((h) => h.floor === e.floor && h.direction === 'down')) {
-        dir = -1;
-        return [{ action: 'STOP', serving: 'down' }];
-      }
-      return [{ action: 'IDLE' }];
+      // --- Each car runs LOOK over its own work (drop-offs + assigned pick-ups) -
+      return cars.map((e, i) => stepCar(e, i, mine[i], dir));
     },
   };
+}
+
+// One car's LOOK decision, given the hall calls dispatched to it this tick.
+function stepCar(e, i, calls, dir) {
+  if (!e.ready) return { action: 'IDLE' };
+
+  const room = e.load < e.capacity;
+  const stops = new Set(e.carCalls);
+  if (room) for (const c of calls) stops.add(c.floor);
+  if (stops.size === 0) return { action: 'IDLE' }; // nothing to do; hold our heading
+
+  const workAhead = (d) => [...stops].some((f) => (d > 0 ? f > e.floor : f < e.floor));
+  const heading = dir[i] > 0 ? 'up' : 'down';
+
+  // 1) Serve our COMMITTED direction right here first — let riders off, and board
+  //    riders going our way. (Decide this before any reversal, so we never abandon
+  //    a rider we just arrived for.)
+  const alightHere = e.carCalls.includes(e.floor);
+  const boardHere = room && calls.some((c) => c.floor === e.floor && c.direction === heading);
+  if (alightHere || boardHere) return { action: 'STOP', serving: heading };
+
+  // 2) Keep going while there is work ahead in our direction.
+  if (workAhead(dir[i])) return { action: dir[i] > 0 ? 'MOVE_UP' : 'MOVE_DOWN' };
+
+  // 3) Nothing ahead: reverse. Serve here in the NEW direction (a turnaround
+  //    pickup) or head toward the work behind us.
+  if (workAhead(-dir[i])) {
+    dir[i] = -dir[i];
+    const nh = dir[i] > 0 ? 'up' : 'down';
+    if (room && calls.some((c) => c.floor === e.floor && c.direction === nh)) {
+      return { action: 'STOP', serving: nh };
+    }
+    return { action: dir[i] > 0 ? 'MOVE_UP' : 'MOVE_DOWN' };
+  }
+
+  // 4) The only thing left is an opposite-direction call AT this floor: serve it.
+  if (room && calls.some((c) => c.floor === e.floor && c.direction === 'up')) {
+    dir[i] = 1;
+    return { action: 'STOP', serving: 'up' };
+  }
+  if (room && calls.some((c) => c.floor === e.floor && c.direction === 'down')) {
+    dir[i] = -1;
+    return { action: 'STOP', serving: 'down' };
+  }
+  return { action: 'IDLE' };
+}
+
+// How "expensive" it is for this car to answer a call, LOOK-style. Lower is better:
+// a same-direction call still ahead of us is cheapest; one we'd have to pass and come
+// back for, or that sits behind us, costs progressively more.
+function reachCost(e, d, call) {
+  const dist = Math.abs(call.floor - e.floor);
+  const ahead = d > 0 ? call.floor >= e.floor : call.floor <= e.floor;
+  const sameWay = (call.direction === 'up') === (d > 0);
+  if (ahead && sameWay) return dist;            // en route, our way — grab it as we pass
+  if (ahead && !sameWay) return dist + 1000;    // we'll pass it but it wants the other way
+  return dist + 2000;                           // behind us — we'd have to turn around
 }`;
 
 export const createController = compileController(source);

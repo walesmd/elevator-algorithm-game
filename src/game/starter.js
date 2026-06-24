@@ -7,40 +7,56 @@
 // "must still deliver/clear" across many seeds.
 
 export const STARTER_CODE = `// You write createController. The engine calls step(state) each tick and you
-// return one command per elevator: MOVE_UP, MOVE_DOWN, STOP, or IDLE.
+// return ONE command per elevator: MOVE_UP, MOVE_DOWN, STOP, or IDLE. The command
+// at index i drives state.elevators[i] — so on a level with two cars, return two
+// commands. An IDLE car is wasted capacity.
 //
-// Like a real elevator, the car shows a direction: on STOP, pass
+// Like a real elevator, a car shows a direction: on STOP, pass
 //   { action: 'STOP', serving: 'up' }  (or 'down')
 // and only riders heading that way board — a down-rider won't get into an up car.
 //
-// state.elevators[0] = { floor, ready, load, capacity, carCalls, direction, ... }
-// state.hallCalls    = [ { floor, direction }, ... ]  // people waiting + which way
+// state.elevators = [ { floor, ready, load, capacity, carCalls, direction, ... }, ... ]
+// state.hallCalls = [ { floor, direction }, ... ]  // people waiting + which way
 //
-// This starter just chases the oldest call. Can you make riders wait less?
+// This starter gives each car one errand at a time: drop a rider off, or go answer
+// a waiting call (a different one per car, so they don't all chase the same person).
+// It works, but every car backtracks a lot. Can you make riders wait less?
 function createController(config) {
   return {
     step(state) {
-      const e = state.elevators[0];
-      if (!e.ready) return [{ action: 'IDLE' }];
+      const cars = state.elevators;
 
-      // Where are we headed, and which way are we serving when we get there?
-      let target = null;
-      let serving = null;
-      if (e.load > 0) {
-        target = e.carCalls[0];                 // head to the nearest drop-off
-        for (const f of e.carCalls) {
-          if (Math.abs(f - e.floor) < Math.abs(target - e.floor)) target = f;
+      // A car carrying riders is committed to its nearest drop-off.
+      const target = cars.map((e) => {
+        if (e.load === 0) return null;
+        let f = e.carCalls[0];
+        for (const c of e.carCalls) {
+          if (Math.abs(c - e.floor) < Math.abs(f - e.floor)) f = c;
         }
-        serving = target > e.floor ? 'up' : 'down';
-      } else if (state.hallCalls.length > 0) {
-        target = state.hallCalls[0].floor;      // else go answer the oldest call
-        serving = state.hallCalls[0].direction; // serving the way they want to go
+        return { floor: f, serving: f > e.floor ? 'up' : 'down' };
+      });
+
+      // Give each still-free car the nearest waiting call it hasn't been handed yet.
+      for (const call of state.hallCalls) {
+        let pick = -1;
+        let bestDist = Infinity;
+        cars.forEach((e, i) => {
+          if (target[i]) return;
+          const d = Math.abs(e.floor - call.floor);
+          if (d < bestDist) { bestDist = d; pick = i; }
+        });
+        if (pick === -1) break;
+        target[pick] = { floor: call.floor, serving: call.direction };
       }
 
-      if (target == null) return [{ action: 'IDLE' }];
-      if (e.floor < target) return [{ action: 'MOVE_UP' }];
-      if (e.floor > target) return [{ action: 'MOVE_DOWN' }];
-      return [{ action: 'STOP', serving }];
+      return cars.map((e, i) => {
+        if (!e.ready) return { action: 'IDLE' };
+        const t = target[i];
+        if (!t) return { action: 'IDLE' };
+        if (e.floor < t.floor) return { action: 'MOVE_UP' };
+        if (e.floor > t.floor) return { action: 'MOVE_DOWN' };
+        return { action: 'STOP', serving: t.serving };
+      });
     },
   };
 }

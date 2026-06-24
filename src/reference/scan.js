@@ -24,33 +24,51 @@ export const source = `// SCAN — sweep end to end, like a disk head. Pick a di
 // heading that way as you pass; reverse only when you reach the PHYSICAL end of the
 // building (floor 0 or the top), even if there is no call out there. That "always
 // run to the end" rule is the difference from LOOK — and it burns extra distance.
+// With more than one car, each car runs its own full end-to-end sweep; a waiting
+// call is handed to the nearest car that has room. Several cars sweeping the same
+// shaft cover the building faster, but each still runs all the way to the top/bottom
+// before turning — the wasted travel that separates SCAN from LOOK.
 function createController(config) {
-  let dir = 1; // +1 = up, -1 = down
   const top = config.numFloors - 1;
+  const dir = Array.from({ length: config.numElevators }, () => 1); // +1 = up, -1 = down, per car
 
   return {
     step(state) {
-      const e = state.elevators[0];
-      if (!e.ready) return [{ action: 'IDLE' }];
+      const cars = state.elevators;
 
-      const stops = new Set(e.carCalls);
-      if (e.load < e.capacity) {
-        for (const h of state.hallCalls) stops.add(h.floor);
+      // Assign each waiting call to the nearest car that has room (ties -> lower index).
+      const mine = cars.map(() => []);
+      for (const call of state.hallCalls) {
+        let pick = -1;
+        let best = Infinity;
+        cars.forEach((e, i) => {
+          if (e.load >= e.capacity) return;
+          const d = Math.abs(e.floor - call.floor);
+          if (d < best) { best = d; pick = i; }
+        });
+        if (pick !== -1) mine[pick].push(call);
       }
-      if (stops.size === 0) return [{ action: 'IDLE' }];
 
-      // Reverse only at the physical extremes.
-      if (dir > 0 && e.floor >= top) dir = -1;
-      else if (dir < 0 && e.floor <= 0) dir = 1;
-      const heading = dir > 0 ? 'up' : 'down';
+      return cars.map((e, i) => {
+        if (!e.ready) return { action: 'IDLE' };
 
-      // Stop for a drop-off here, or to board riders going our committed direction.
-      const alightHere = e.carCalls.includes(e.floor);
-      const boardHere = e.load < e.capacity && state.hallCalls.some((h) => h.floor === e.floor && h.direction === heading);
-      if (alightHere || boardHere) return [{ action: 'STOP', serving: heading }];
+        const stops = new Set(e.carCalls);
+        if (e.load < e.capacity) for (const c of mine[i]) stops.add(c.floor);
+        if (stops.size === 0) return { action: 'IDLE' };
 
-      // Otherwise keep sweeping toward the end.
-      return [{ action: dir > 0 ? 'MOVE_UP' : 'MOVE_DOWN' }];
+        // Reverse only at the physical extremes.
+        if (dir[i] > 0 && e.floor >= top) dir[i] = -1;
+        else if (dir[i] < 0 && e.floor <= 0) dir[i] = 1;
+        const heading = dir[i] > 0 ? 'up' : 'down';
+
+        // Stop for a drop-off here, or to board riders going our committed direction.
+        const alightHere = e.carCalls.includes(e.floor);
+        const boardHere = e.load < e.capacity && mine[i].some((c) => c.floor === e.floor && c.direction === heading);
+        if (alightHere || boardHere) return { action: 'STOP', serving: heading };
+
+        // Otherwise keep sweeping toward the end.
+        return { action: dir[i] > 0 ? 'MOVE_UP' : 'MOVE_DOWN' };
+      });
     },
   };
 }`;
