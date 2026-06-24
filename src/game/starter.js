@@ -37,15 +37,19 @@ function createController(config) {
       });
 
       // Give each still-free car the nearest waiting call it hasn't been handed yet.
+      // On a zoned level a car only reaches floors in its own range, so skip calls it
+      // can't serve (and a rider going past the car's range gets dropped at the
+      // boundary to transfer — the engine handles the hand-off).
       for (const call of state.hallCalls) {
         let pick = -1;
         let bestDist = Infinity;
         cars.forEach((e, i) => {
           if (target[i]) return;
+          if (!serves(e, call)) return;
           const d = Math.abs(e.floor - call.floor);
           if (d < bestDist) { bestDist = d; pick = i; }
         });
-        if (pick === -1) break;
+        if (pick === -1) continue;
         target[pick] = { floor: call.floor, serving: call.direction };
       }
 
@@ -59,5 +63,13 @@ function createController(config) {
       });
     },
   };
+}
+
+// A car only covers floors in [minFloor, maxFloor]; it can take a rider their way
+// only if there's room to move that way inside its range. (On a single-zone level a
+// car covers the whole building, so this is always true.)
+function serves(e, call) {
+  if (call.floor < e.minFloor || call.floor > e.maxFloor) return false;
+  return call.direction === 'up' ? call.floor < e.maxFloor : call.floor > e.minFloor;
 }
 `;

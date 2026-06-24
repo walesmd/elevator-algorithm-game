@@ -54,6 +54,7 @@ function createController(config) {
         let best = Infinity;
         cars.forEach((e, i) => {
           if (e.load >= e.capacity) return;            // no room: can't pick anyone up
+          if (!serves(e, call)) return;                // outside this car's zone
           const cost = reachCost(e, dir[i], call);
           if (cost < best) { best = cost; pick = i; }
         });
@@ -109,6 +110,16 @@ function stepCar(e, i, calls, dir) {
     return { action: 'STOP', serving: 'down' };
   }
   return { action: 'IDLE' };
+}
+
+// Can this car serve this call at all? On a zoned level a car only covers floors
+// in [minFloor, maxFloor], and it can only take a rider the way they want to go if
+// there is room to move that way inside its range (a car at the top of its zone
+// can't carry anyone further up — that rider is the next zone's job). On a normal
+// full-height level this is always true, so behavior is unchanged.
+function serves(e, call) {
+  if (call.floor < e.minFloor || call.floor > e.maxFloor) return false;
+  return call.direction === 'up' ? call.floor < e.maxFloor : call.floor > e.minFloor;
 }
 
 // How "expensive" it is for this car to answer a call, LOOK-style. Lower is better:

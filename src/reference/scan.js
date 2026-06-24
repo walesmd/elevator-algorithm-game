@@ -29,20 +29,21 @@ export const source = `// SCAN — sweep end to end, like a disk head. Pick a di
 // shaft cover the building faster, but each still runs all the way to the top/bottom
 // before turning — the wasted travel that separates SCAN from LOOK.
 function createController(config) {
-  const top = config.numFloors - 1;
   const dir = Array.from({ length: config.numElevators }, () => 1); // +1 = up, -1 = down, per car
 
   return {
     step(state) {
       const cars = state.elevators;
 
-      // Assign each waiting call to the nearest car that has room (ties -> lower index).
+      // Assign each waiting call to the nearest car that has room and whose zone
+      // covers it (ties -> lower index).
       const mine = cars.map(() => []);
       for (const call of state.hallCalls) {
         let pick = -1;
         let best = Infinity;
         cars.forEach((e, i) => {
           if (e.load >= e.capacity) return;
+          if (!serves(e, call)) return;
           const d = Math.abs(e.floor - call.floor);
           if (d < best) { best = d; pick = i; }
         });
@@ -56,9 +57,10 @@ function createController(config) {
         if (e.load < e.capacity) for (const c of mine[i]) stops.add(c.floor);
         if (stops.size === 0) return { action: 'IDLE' };
 
-        // Reverse only at the physical extremes.
-        if (dir[i] > 0 && e.floor >= top) dir[i] = -1;
-        else if (dir[i] < 0 && e.floor <= 0) dir[i] = 1;
+        // Reverse only at the extremes of this car's range (the whole building when
+        // it isn't zoned).
+        if (dir[i] > 0 && e.floor >= e.maxFloor) dir[i] = -1;
+        else if (dir[i] < 0 && e.floor <= e.minFloor) dir[i] = 1;
         const heading = dir[i] > 0 ? 'up' : 'down';
 
         // Stop for a drop-off here, or to board riders going our committed direction.
@@ -71,6 +73,14 @@ function createController(config) {
       });
     },
   };
+}
+
+// On a zoned level a car only covers floors in [minFloor, maxFloor], and can only
+// take a rider their way if there's room to move that way inside its range. On a
+// full-height level this is always true, so behavior is unchanged.
+function serves(e, call) {
+  if (call.floor < e.minFloor || call.floor > e.maxFloor) return false;
+  return call.direction === 'up' ? call.floor < e.maxFloor : call.floor > e.minFloor;
 }`;
 
 export const createController = compileController(source);

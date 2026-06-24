@@ -9,6 +9,10 @@
 // Field guide:
 //   numFloors, numElevators, capacity, ticksPerFloor, doorTicks, timeLimit
 //   spawn: { type:'uniform'|'up-peak'|'down-peak', count, firstTick, lastTick }
+//   elevators: optional per-car ranges [{ minFloor, maxFloor }, ...] for a zoned
+//     "skyscraper" level — a car only travels/opens inside its band, and zones tile
+//     the building overlapping on a single shared "sky-lobby" floor where riders
+//     transfer. Omit for a normal full-height building.
 //   seeds: the fixed seeds a submission is scored against (averaged)
 //   weights: how the composite score trades off wait / journey / distance
 //   brief: the player-facing card — says WHAT to do, never HOW.
@@ -192,6 +196,58 @@ export const levels = [
       constraint: 'Distance is back on the scoreboard — and now you pay for it three cars at a time, so overlapping, wandering cars cost triple.',
       measured: 'Average wait time AND the cars’ combined distance traveled.',
       bar: 'Good dispatch keeps cars from re-treading each other’s ground; turning each car around the instant nothing’s left ahead keeps travel down. Compare a full SCAN sweep against the LOOK refinement across several cars in the gallery.',
+    },
+  },
+  {
+    id: 'l10',
+    name: 'Level 10 — The Skyscraper',
+    numFloors: 20,
+    numElevators: 2,
+    capacity: 8,
+    ticksPerFloor: 2,
+    doorTicks: 2,
+    timeLimit: 5000,
+    spawn: { type: 'uniform', count: 36, firstTick: 0, lastTick: 288 },
+    seeds: [1, 2, 3, 4, 5],
+    // Two zoned shafts meeting at floor 10, the shared "sky-lobby".
+    elevators: [
+      { minFloor: 0, maxFloor: 10 },
+      { minFloor: 10, maxFloor: 19 },
+    ],
+    weights: { wait: 1, journey: 0.5, distance: 0.1, undelivered: 1000 },
+    brief: {
+      situation: 'A 20-floor tower. Two cars — but neither covers the whole building: one serves the lower floors, one the upper, and they meet on a single shared “sky-lobby” floor.',
+      goal: 'Deliver everyone with low waits — including riders whose destination your car can’t reach.',
+      constraint: 'Each car has a fixed range (`minFloor..maxFloor`, on every car in the run state). A rider crossing between zones rides to the sky-lobby, gets off, and waits there for the other car to finish the trip — the engine hands them off automatically when you drop them at the boundary.',
+      measured: 'Average wait and journey time (a transfer adds to the journey), and whether everyone arrives.',
+      bar: 'A car simply can’t answer a call outside its range — don’t send it chasing one. Serve the riders within reach and let cross-building riders hand off at the sky-lobby. This is how real super-tall towers run: zoned shafts with a sky-lobby transfer.',
+    },
+  },
+  {
+    id: 'l11',
+    name: 'Level 11 — Sky Lobby',
+    numFloors: 24,
+    numElevators: 4,
+    capacity: 6,
+    ticksPerFloor: 2,
+    doorTicks: 2,
+    timeLimit: 5000,
+    spawn: { type: 'uniform', count: 70, firstTick: 0, lastTick: 350 },
+    seeds: [1, 2, 3, 4, 5],
+    // Two zones of two cars each, meeting at floor 12 (the sky-lobby).
+    elevators: [
+      { minFloor: 0, maxFloor: 12 },
+      { minFloor: 0, maxFloor: 12 },
+      { minFloor: 12, maxFloor: 23 },
+      { minFloor: 12, maxFloor: 23 },
+    ],
+    weights: { wait: 1, journey: 0.5, distance: 0.1, undelivered: 1000 },
+    brief: {
+      situation: 'A 24-floor tower at rush hour. Four cars split into two zones of two — the lower pair and the upper pair — meeting at the sky-lobby.',
+      goal: 'Clear the rush with low waits: share the work within each zone AND hand cross-building riders off at the sky-lobby.',
+      constraint: 'Two cars now cover each zone, so within a zone you again choose which car answers which call — and a rider crossing zones still transfers at the shared floor.',
+      measured: 'Average wait and journey time, and that everyone arrives.',
+      bar: 'Everything at once: split the calls between the two cars in each zone so they don’t bunch, keep every car inside its range, and route cross-zone riders through the sky-lobby.',
     },
   },
 ];
