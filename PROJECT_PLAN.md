@@ -456,8 +456,11 @@ badges and lock state, unlock logic (a level opens once the previous earns ≥ 1
 toast, and resuming the last-played level on reload.
 *DoD met:* progress and saved code survive a reload; levels unlock on ≥ 1★.
 
-**Phase 6 — Content + polish. 🚧 IN PROGRESS.** The full level set, then onboarding,
-the docs panel, hints, and visual polish. Levels land in staged PRs:
+**Phase 6 — Content + polish. ✅ DONE.** The full eleven-level set (single-car →
+multi-car → zoned skyscraper) plus visual polish. The remaining first-run
+*onboarding tutorial* was deliberately deferred into **Phase 7**, where it can be
+built once on top of the new guidance surface (tiered hints + concept/docs) instead
+of being hand-rolled now and reworked later. Levels landed in staged PRs:
 - **6A (done):** single-car curriculum — L3 up-peak, L4 hotel traffic, L5 small
   capacity, L6 tall high-rise (18 floors); adds the `hotel` spawn type.
 - **6B (done):** multiple elevators — three coordination levels (L7 two-car
@@ -474,10 +477,16 @@ the docs panel, hints, and visual polish. Levels land in staged PRs:
   untouched so single-zone runs stay byte-identical). All references + starter became
   range-aware. Renderer shades zones and marks the sky-lobby. Levels L10 (20-floor,
   two zones) and L11 (24-floor, four-car capstone: two cars per zone).
-- later: an onboarding tutorial and visual polish. (The deeper educational layer —
-  tiered hints, a concept/docs panel, richer post-run feedback — is now its own
-  phase: **Phase 7 — Pedagogy.**)
-*DoD:* a new player can go from level 1 to the end with in-game guidance only.
+- **Polish (done):** responsive layout — the page now reflows from the two-column
+  desktop view (brief over the building on the left, editor/results on the right) to
+  a single column on narrow screens, re-ordered to brief → editor → building so a
+  phone user reads, writes, then watches; plus an inline (offline-safe) favicon and a
+  meta description.
+- **Deferred to Phase 7:** the first-run onboarding tutorial and the deeper
+  educational layer (tiered hints, a concept/docs panel, richer post-run feedback).
+*DoD met:* a new player can go from level 1 to the end on in-game guidance (briefs +
+starter comments + the spoiler gallery); the onboarding tutorial in Phase 7 will make
+that first run smoother still.
 
 **Phase 7 — Pedagogy & educational depth.** Phase 6 makes the game *complete*;
 Phase 7 makes it *teach*. This is the priority phase — everything in it is judged
