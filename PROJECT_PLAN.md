@@ -474,11 +474,29 @@ the docs panel, hints, and visual polish. Levels land in staged PRs:
   untouched so single-zone runs stay byte-identical). All references + starter became
   range-aware. Renderer shades zones and marks the sky-lobby. Levels L10 (20-floor,
   two zones) and L11 (24-floor, four-car capstone: two cars per zone).
-- later: onboarding tutorial, docs panel, tiered hints, polish.
+- later: an onboarding tutorial and visual polish. (The deeper educational layer —
+  tiered hints, a concept/docs panel, richer post-run feedback — is now its own
+  phase: **Phase 7 — Pedagogy.**)
 *DoD:* a new player can go from level 1 to the end with in-game guidance only.
 
-**Phase 7 — Stretch.** Ghost/replay URL sharing, daily-seed challenge, and the A/B
-compare-two-algorithms tool detailed below.
+**Phase 7 — Pedagogy & educational depth.** Phase 6 makes the game *complete*;
+Phase 7 makes it *teach*. This is the priority phase — everything in it is judged
+against the one question from the doctrine (CLAUDE.md): does it help someone
+*understand*? It is deliberately sequenced ahead of the engagement/sharing features
+(now **Phase 8**). The work:
+
+- **A/B compare two algorithms side by side** — the anchor feature, detailed below.
+- **Tiered hints (1 → 2 → 3), never the answer.** Hint 1 restates the goal/concept;
+  Hint 2 points at the specific symptom in *their* run; Hint 3 names the technique.
+  Pulled forward from Phase 6's polish list because hints are core pedagogy.
+- **Expanded diagnostic + Socratic feedback.** Grow the local anti-pattern analyzer
+  (more named patterns, per level) and compare each run to par *and* to the player's
+  own previous best, so feedback stays specific, kind, and concept-linked.
+- **A concept / docs panel.** Name the CS idea behind each level (scheduling, SCAN /
+  LOOK, multi-car dispatch, zoning + transfers) and link out — "name the concept,
+  not the code."
+- **Earned, opt-in worked references.** Keep the reference gallery spoiler-gated;
+  surface a worked explanation only after a level is cleared or explicitly revealed.
 
 *A/B compare two algorithms side by side.* Replay two algorithms (the player's vs a
 reference, or two references) on the **same level and the same seed**, with their
@@ -515,7 +533,22 @@ exact instants where the choice of algorithm changes the outcome.
 
 (Also possible later, behind the feedback interface: optional Monaco editor and an
 optional bring-your-own-key generative provider for plain-English run/compare prose —
-additive only, never bundled, never required.)
+additive only, never bundled, never required. Because it deepens *explanation*, it
+belongs with the Phase 7 pedagogy work, not the Phase 8 sharing features.)
+
+**Phase 8 — Sharing & challenge (stretch).** The engagement and replayability layer,
+deliberately sequenced after the Phase 7 educational work:
+
+- **Ghost / replay URL sharing.** Encode a run (level + seed + the player's code, or
+  just a recorded trace) into a shareable link, so a learner can hand someone their
+  solution to watch, or race a "ghost" of a previous attempt. Stays client-side and
+  offline-friendly — the link carries the data, no server.
+- **Daily-seed challenge.** One shared seed per day on a chosen level, with a
+  personal-best board, for a low-stakes recurring reason to come back and refine an
+  algorithm against everyone else's same traffic.
+
+These are about reach and replayability, not teaching, which is why they follow
+Phase 7 rather than lead it.
 
 ---
 

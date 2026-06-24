@@ -68,8 +68,10 @@ What works today:
 - Passing headless tests (`simulation`, `recording`, `phase3`, `references`,
   `progression`).
 
-Not yet built: an onboarding tutorial and tiered hints (Phase 6 polish), plus the
-Phase 7 stretch tools (ghost/replay sharing, A/B compare, daily-seed challenge).
+Not yet built: an onboarding tutorial and visual polish (Phase 6); the **Phase 7
+pedagogy layer** — tiered hints, richer Socratic feedback, a concept/docs panel, and
+an A/B "compare two algorithms" tool with notable-moment callouts; then **Phase 8
+sharing/challenge** stretch features (ghost/replay URL sharing, daily-seed challenge).
 
 ## Run it
 
