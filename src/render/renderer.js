@@ -35,6 +35,13 @@ const C = {
   waitWarn: '#ffcf6b',
   waitRed: '#ff5d52',
   ghost: '#7f8b96',
+  // Zoned ("skyscraper") levels: a faint tint behind each zone's reachable band
+  // (alternating so neighbouring zones read apart) and a violet sky-lobby marker —
+  // a cool accent that won't be mistaken for the amber/red starvation colours.
+  zoneTint: ['rgba(108,194,255,0.045)', 'rgba(185,139,255,0.05)'],
+  zoneEdge: ['rgba(108,194,255,0.20)', 'rgba(185,139,255,0.22)'],
+  sky: '#b98bff',
+  skyText: '#e7dcff',
 };
 
 /**
@@ -45,6 +52,20 @@ export function createRenderer(canvas, level) {
   const ctx = canvas.getContext('2d');
   const F = level.numFloors;
   const N = level.numElevators ?? 1;
+  // Per-car floor range (zoned levels). Default: every car covers the whole building.
+  const ranges = Array.from({ length: N }, (_, i) => {
+    const r = (level.elevators && level.elevators[i]) || {};
+    return { lo: r.minFloor ?? 0, hi: r.maxFloor ?? F - 1 };
+  });
+  const zoned = ranges.some((r) => r.lo > 0 || r.hi < F - 1);
+  // Distinct zones (by range), for the alternating tint; and the sky-lobby floors
+  // where one zone's top meets another's bottom (the shared transfer floors).
+  const zoneIds = [...new Set(ranges.map((r) => `${r.lo}-${r.hi}`))];
+  const zoneIndexOf = (i) => zoneIds.indexOf(`${ranges[i].lo}-${ranges[i].hi}`);
+  const skyLobbies = [];
+  for (let f = 0; f < F; f++) {
+    if (ranges.some((r) => r.hi === f) && ranges.some((r) => r.lo === f)) skyLobbies.push(f);
+  }
   // Wait thresholds scale with the building, where `sweep` = the ticks to cross it
   // once. Calibrated (see test/recording-derived tuning) so a strong algorithm
   // stays all-green, the beatable baseline shows some amber, and a car that strands
@@ -140,17 +161,28 @@ export function createRenderer(canvas, level) {
       ctx.fillText(String(f), bandLeft - 6, yOf(f));
     }
 
-    // Shaft tracks (one per elevator).
+    // Shaft tracks (one per elevator). On a zoned level a shaft spans only its car's
+    // reachable band [lo, hi] — so cars read as different-height shafts overlapping
+    // at the sky-lobby — and gets a faint zone tint. Otherwise it runs full height.
     for (let i = 0; i < N; i++) {
       const cx = shaftCenterX(i);
       const w = geo.shaftVisW;
       const x = cx - w / 2;
-      const top = geo.padTop;
-      const h = H - geo.padTop - geo.padBottom;
+      const r = ranges[i];
+      const top = zoned ? yOf(r.hi) - geo.floorH / 2 : geo.padTop;
+      const bottom = zoned ? yOf(r.lo) + geo.floorH / 2 : H - geo.padBottom;
+      const h = bottom - top;
+
+      if (zoned) {
+        const z = zoneIndexOf(i) % C.zoneTint.length;
+        ctx.fillStyle = C.zoneTint[z];
+        roundRect(ctx, x, top, w, h, 8);
+        ctx.fill();
+      }
       ctx.fillStyle = C.shaft;
       roundRect(ctx, x, top, w, h, 8);
       ctx.fill();
-      ctx.strokeStyle = C.shaftEdge;
+      ctx.strokeStyle = zoned ? C.zoneEdge[zoneIndexOf(i) % C.zoneEdge.length] : C.shaftEdge;
       ctx.lineWidth = 1;
       roundRect(ctx, x + 0.5, top + 0.5, w - 1, h - 1, 8);
       ctx.stroke();
@@ -162,6 +194,36 @@ export function createRenderer(canvas, level) {
       ctx.moveTo(Math.round(x + w - 5) + 0.5, top + 6);
       ctx.lineTo(Math.round(x + w - 5) + 0.5, top + h - 6);
       ctx.stroke();
+    }
+
+    drawSkyLobbies();
+  }
+
+  // Mark each sky-lobby: a dashed violet line across the building plus a small tag,
+  // so the shared transfer floor is obvious. (No-op on a normal full-height level.)
+  function drawSkyLobbies() {
+    if (!skyLobbies.length) return;
+    const left = geo.startX;
+    const right = geo.buildingRight;
+    for (const f of skyLobbies) {
+      const y = Math.round(yOf(f)) + 0.5;
+      ctx.save();
+      ctx.strokeStyle = C.sky;
+      ctx.globalAlpha = 0.7;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.moveTo(left, y);
+      ctx.lineTo(right, y);
+      ctx.stroke();
+      ctx.restore();
+
+      // "SKY LOBBY" tag tucked at the left edge of the hall lane.
+      ctx.fillStyle = C.sky;
+      ctx.font = '600 8px ui-monospace, SFMono-Regular, Menlo, monospace';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText('SKY LOBBY', left + 1, y - 2);
     }
   }
 
@@ -360,8 +422,8 @@ export function createRenderer(canvas, level) {
     clear();
     drawBuilding();
     for (let i = 0; i < N; i++) {
-      const ev = { floor: 0, dir: 'idle', doorOpen: 0, load: 0, capacity: level.capacity ?? 8, carCalls: [] };
-      drawCar(ev, 0, 0, i);
+      const ev = { floor: ranges[i].lo, dir: 'idle', doorOpen: 0, load: 0, capacity: level.capacity ?? 8, carCalls: [] };
+      drawCar(ev, ranges[i].lo, 0, i);
     }
   }
 

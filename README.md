@@ -49,23 +49,27 @@ What works today:
   previous earns ≥ 1★, with a "level unlocked" toast. Best stars, your code per
   level, and the last-played level are saved to `localStorage`, so progress
   survives a reload and you resume where you left off.
-- A growing **level curriculum** (`src/game/levels.js`): nine levels so far. Six
+- A growing **level curriculum** (`src/game/levels.js`): eleven levels so far. Six
   single-car ones — getting moving, sweeping (SCAN/LOOK), a morning up-peak rush,
   hotel (lobby-centric) traffic, a sudden surge of calls, and an 18-floor high-rise
   where distance/energy becomes the headline (LOOK's turn-early sweep vs SCAN's run
-  to the ends) — then three multiple-elevator ones: a two-car building (drive both),
-  a three-car surge (dispatch the cars so they don't all chase the same call), and a
-  16-floor three-car tower where distance is back on the scoreboard. The reference
-  controllers and starter are N-car aware (a call goes to the best-placed car, then
-  each car runs its own strategy). Traffic shapes: `uniform` / `up-peak` /
-  `down-peak` / `hotel`.
+  to the ends); three multiple-elevator ones — a two-car building (drive both), a
+  three-car surge (dispatch the cars so they don't all chase the same call), and a
+  16-floor three-car tower where distance is back on the scoreboard; then two zoned
+  "skyscraper" ones — a 20-floor tower whose two cars each cover only part of the
+  building and hand cross-building riders off at a shared **sky-lobby**, and a
+  24-floor four-car capstone (two cars per zone) that needs dispatch *and* transfers
+  at once. The reference controllers and starter are N-car aware and range-aware (a
+  call goes to the best-placed car that can actually reach it, then each car runs its
+  own strategy within its zone). Traffic shapes: `uniform` / `up-peak` / `down-peak`
+  / `hotel`.
 - A full play loop: read the brief, edit the algorithm, Run, watch it, read the
   metrics + feedback, and advance through unlocking levels.
 - Passing headless tests (`simulation`, `recording`, `phase3`, `references`,
   `progression`).
 
-Not yet built: zoned "skyscraper" levels where an elevator serves a floor subset
-and riders transfer at a sky-lobby, an onboarding tutorial, and tiered hints.
+Not yet built: an onboarding tutorial and tiered hints (Phase 6 polish), plus the
+Phase 7 stretch tools (ghost/replay sharing, A/B compare, daily-seed challenge).
 
 ## Run it
 

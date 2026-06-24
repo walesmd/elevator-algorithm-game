@@ -249,6 +249,45 @@ function avgOver(level, factory, key) {
   assert(oneCarStrands, 'running only car 0 strands riders the full car bank delivers (extra cars matter)');
 }
 
+// --- 11. Zoned skyscraper: ranges + sky-lobby transfers (Phase 6C) ----------
+{
+  const L10 = getLevel('l10');
+  assert(Array.isArray(L10.elevators) && L10.elevators.length === 2, 'Level 10 is a two-zone level');
+
+  const zones = L10.elevators;
+  const rec = runSimulation(L10, 1, look.createController, { record: true });
+
+  // (a) Every car stays inside its own zone for the entire run.
+  let inRange = true;
+  let callsInRange = true;
+  for (const f of rec.frames) {
+    for (const ev of f.elevators) {
+      if (ev.pos < ev.minFloor - 1e-9 || ev.pos > ev.maxFloor + 1e-9) inRange = false;
+      for (const c of ev.carCalls) if (c < ev.minFloor || c > ev.maxFloor) callsInRange = false;
+    }
+  }
+  assert(inRange, 'each car stays within its zone [minFloor, maxFloor] for the whole run');
+  assert(callsInRange, 'a car never plans a stop outside its range (cross-zone riders are dropped at the sky-lobby)');
+
+  // (b) There are genuine cross-zone riders, and they are all delivered via transfer.
+  const inZone = (fl, z) => fl >= z.minFloor && fl <= z.maxFloor;
+  const ps = rec.passengers;
+  const crossers = ps.filter((p) => !zones.some((z) => inZone(p.origin, z) && inZone(p.dest, z)));
+  assert(crossers.length > 0, 'L10 seed 1 has cross-zone riders who must transfer');
+  assert(ps.every((p) => p.dropTick != null), 'every rider — including cross-zone transferers — is delivered');
+  assert(
+    crossers.every((p) => p.pickupTick != null && p.dropTick != null && p.dropTick > p.pickupTick),
+    'a transferer is picked up once (wait), rides, transfers, and is delivered later (journey)'
+  );
+
+  // (c) Byte-identity canary: an explicit FULL-range zone behaves exactly like no
+  //     zone at all — the transfer machinery is inert on a normal building.
+  const withRange = { ...L2, elevators: [{ minFloor: 0, maxFloor: L2.numFloors - 1 }] };
+  const plain = runSimulation(L2, 3, look.createController).metrics;
+  const ranged = runSimulation(withRange, 3, look.createController).metrics;
+  assert(JSON.stringify(plain) === JSON.stringify(ranged), 'an explicit full-range zone is byte-identical to no zone');
+}
+
 function r1(n) {
   return Math.round(n * 10) / 10;
 }

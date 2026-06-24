@@ -50,10 +50,11 @@ function createController(config) {
         let bestDist = Infinity;
         cars.forEach((e, i) => {
           if (target[i]) return;                       // already busy with an errand
+          if (!serves(e, call)) return;                // outside this car's zone
           const d = Math.abs(e.floor - call.floor);
           if (d < bestDist) { bestDist = d; pick = i; }
         });
-        if (pick === -1) break;                        // every car already has an errand
+        if (pick === -1) continue;                     // no free car can serve this call yet
         target[pick] = { floor: call.floor, serving: call.direction };
       }
 
@@ -78,6 +79,14 @@ function nearest(from, floors) {
     if (d < bestDist) { best = f; bestDist = d; }
   }
   return best;
+}
+
+// On a zoned level a car only covers floors in [minFloor, maxFloor], and can only
+// take a rider their way if there's room to move that way inside its range. On a
+// full-height level this is always true, so behavior is unchanged.
+function serves(e, call) {
+  if (call.floor < e.minFloor || call.floor > e.maxFloor) return false;
+  return call.direction === 'up' ? call.floor < e.maxFloor : call.floor > e.minFloor;
 }`;
 
 export const createController = compileController(source);

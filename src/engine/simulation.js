@@ -51,7 +51,30 @@ export function runSimulation(level, seed, createController, opts = {}) {
   // unchanged; the sandbox worker passes a small cap.
   const maxWarnings = opts.maxWarnings ?? Infinity;
 
+  // Per-car floor range. A zoned ("skyscraper") level gives each car a
+  // `{ minFloor, maxFloor }` in `level.elevators[i]`; a car can only travel and open
+  // its doors inside that band. With no ranges given, every car covers the whole
+  // building [0, numFloors-1] — which makes every non-zoned level behave exactly as
+  // before (the byte-identity canary the tests pin).
+  const ranges = Array.from({ length: numElevators }, (_, i) => {
+    const r = (level.elevators && level.elevators[i]) || {};
+    return { lo: r.minFloor ?? 0, hi: r.maxFloor ?? numFloors - 1 };
+  });
+
   const passengers = generatePassengers(level, seed);
+  // A rider's journey is tracked in three fields so a car can hand them off at a
+  // sky-lobby without losing where they ultimately want to go:
+  //   finalDest — the floor they actually want (never changes)
+  //   curOrigin — where they are waiting RIGHT NOW (their origin, or the sky-lobby
+  //               they were just dropped at to transfer)
+  //   legTarget — the floor the car currently carrying them will drop them at (a
+  //               point inside that car's range), or null while they wait.
+  // origin/dest are left untouched so single-zone runs stay byte-identical.
+  for (const p of passengers) {
+    p.finalDest = p.dest;
+    p.curOrigin = p.origin;
+    p.legTarget = null;
+  }
   const warnings = [];
   const warn = (msg) => { if (warnings.length < maxWarnings) warnings.push(msg); };
   const trace = [];
@@ -71,7 +94,9 @@ export function runSimulation(level, seed, createController, opts = {}) {
 
   const elevators = Array.from({ length: numElevators }, (_, i) => ({
     index: i,
-    floor: 0,
+    floor: ranges[i].lo, // a car starts at the bottom of its own range (lobby / sky-lobby)
+    minFloor: ranges[i].lo,
+    maxFloor: ranges[i].hi,
     direction: 'idle',
     doors: 'closed',
     moving: false,
@@ -142,11 +167,11 @@ export function runSimulation(level, seed, createController, opts = {}) {
         return;
       }
       if (action === 'MOVE_UP') {
-        if (el.floor < numFloors - 1) startMove(el, +1, ticksPerFloor);
-        else warn(`MOVE_UP ignored at top floor (elevator ${i}, t=${time}).`);
+        if (el.floor < el.maxFloor) startMove(el, +1, ticksPerFloor);
+        else warn(`MOVE_UP ignored at top of its range (elevator ${i}, t=${time}).`);
       } else if (action === 'MOVE_DOWN') {
-        if (el.floor > 0) startMove(el, -1, ticksPerFloor);
-        else warn(`MOVE_DOWN ignored at bottom floor (elevator ${i}, t=${time}).`);
+        if (el.floor > el.minFloor) startMove(el, -1, ticksPerFloor);
+        else warn(`MOVE_DOWN ignored at bottom of its range (elevator ${i}, t=${time}).`);
       } else if (action === 'STOP') {
         // Real direction-aware boarding: a car shows the direction it's committed to,
         // and riders going the other way wait for the next car. An EXPLICIT `serving`
@@ -194,20 +219,23 @@ function recordFrame(time, elevators, waiting, capacity, ticksPerFloor, delivere
     return {
       index: el.index,
       floor: el.floor,
+      minFloor: el.minFloor,
+      maxFloor: el.maxFloor,
       pos: el.floor + el.pendingDir * progress,
       dir: el.direction,
       doorOpen: el.doors === 'open' ? 1 : 0,
       load: el.onboard.length,
       capacity,
-      carCalls: [...new Set(el.onboard.map((p) => p.dest))].sort((a, b) => a - b),
+      carCalls: [...new Set(el.onboard.map((p) => p.legTarget))].sort((a, b) => a - b),
     };
   });
   const waitingSnapshot = waiting.map((p) => ({
     id: p.id,
-    floor: p.origin,
-    dest: p.dest,
-    dir: p.dest > p.origin ? 'up' : 'down',
+    floor: p.curOrigin,
+    dest: p.finalDest,
+    dir: p.finalDest > p.curOrigin ? 'up' : 'down',
     wait: time - p.spawnTick,
+    transfer: p.pickupTick != null, // mid-journey, waiting at a sky-lobby for an onward car
   }));
   return { t: time, delivered, total, distance, riding, elevators: evs, waiting: waitingSnapshot };
 }
@@ -219,54 +247,82 @@ function startMove(el, dir, ticksPerFloor) {
   el.direction = dir > 0 ? 'up' : 'down';
 }
 
-// Alight everyone whose destination is this floor, then board waiting riders here
-// in arrival order up to capacity. If `serving` ('up'|'down') is given, only riders
-// heading that way board (real direction-aware boarding — a rider going the other
-// way waits for the next car); without it, everyone boards (naive, direction-blind).
-// Returns the number delivered (alighted) here.
+// Service a stop in three strict phases so a sky-lobby transfer is unambiguous and
+// deterministic. `serving` ('up'|'down') is the car's committed direction (so only
+// riders going that way board, real direction-aware boarding); without it the engine
+// implies one forgivingly so a naive car can't wedge at a turnaround.
+// Returns the number FINALLY delivered (transfers don't count — they're still in
+// flight). A car only carries a rider as far as its own range reaches, dropping them
+// at the boundary (a sky-lobby) to wait for the next zone's car.
 function serviceStop(el, waiting, capacity, time, serving, strict) {
+  const { minFloor: lo, maxFloor: hi } = el;
   let deliveredHere = 0;
+
+  // (a) Alight everyone whose current-leg target is this floor. If that's their final
+  //     destination they're delivered; otherwise they're transferring — drop them
+  //     here as a fresh waiter heading on toward finalDest.
+  const transfers = [];
   for (let k = el.onboard.length - 1; k >= 0; k--) {
     const p = el.onboard[k];
-    if (p.dest === el.floor) {
-      p.dropTick = time;
+    if (p.legTarget === el.floor) {
       el.onboard.splice(k, 1);
-      deliveredHere++;
+      if (p.legTarget === p.finalDest) {
+        p.dropTick = time;
+        deliveredHere++;
+      } else {
+        p.curOrigin = el.floor; // now waiting at the sky-lobby for an onward car
+        p.legTarget = null;
+        transfers.push(p);
+      }
     }
   }
 
-  // Pick the single direction we'll board this stop. An explicit `serving` is honored
-  // exactly. An implied direction is forgiving: if nobody here is heading that way,
-  // serve whoever IS here (the longest-waiting one's direction) so a naive car can't
-  // get stuck at a turnaround. Either way it's ONE direction — a stop never boards
-  // both, so "board everyone" is never available.
-  const dirOf = (p) => (p.dest > p.origin ? 'up' : 'down');
+  // A rider only boards a car that can carry them somewhere NEW: clamp their final
+  // destination into this car's range; if that lands on the current floor the car
+  // can't help them (they're at this car's range edge and need the next zone).
+  const dirOf = (p) => (p.finalDest > p.curOrigin ? 'up' : 'down');
+  const canCarry = (p) => clamp(p.finalDest, lo, hi) !== el.floor;
+
+  // (b) Pick the single direction we'll board this stop, then board from the
+  //     PRE-EXISTING waiting list in arrival order up to capacity.
   let board = serving;
   if (!strict) {
-    const here = waiting.filter((p) => p.origin === el.floor);
+    const here = waiting.filter((p) => p.curOrigin === el.floor && canCarry(p));
     if (!board || !here.some((p) => dirOf(p) === board)) {
       board = here.length ? dirOf(here[0]) : board;
     }
   }
-
   for (let k = 0; k < waiting.length && el.onboard.length < capacity; ) {
     const p = waiting[k];
-    if (p.origin === el.floor && (!board || dirOf(p) === board)) {
-      p.pickupTick = time;
+    if (p.curOrigin === el.floor && canCarry(p) && (!board || dirOf(p) === board)) {
+      if (p.pickupTick == null) p.pickupTick = time; // wait is measured to the FIRST pickup
+      p.legTarget = clamp(p.finalDest, lo, hi);
       el.onboard.push(p);
       waiting.splice(k, 1);
     } else {
       k++;
     }
   }
+
+  // (c) Only now do transfers re-enter the hall, so a rider can't be dropped and
+  //     re-boarded by the same car on the same stop (which would also be non-terminating).
+  for (const p of transfers) waiting.push(p);
   return deliveredHere;
 }
 
+function clamp(v, lo, hi) {
+  return v < lo ? lo : v > hi ? hi : v;
+}
+
 function snapshotElevator(el, capacity) {
-  const carCalls = [...new Set(el.onboard.map((p) => p.dest))].sort((a, b) => a - b);
+  // carCalls are this-leg drop-offs (legTarget), always inside the car's range — so a
+  // controller never sees a stop it can't actually drive to.
+  const carCalls = [...new Set(el.onboard.map((p) => p.legTarget))].sort((a, b) => a - b);
   return {
     index: el.index,
     floor: el.floor,
+    minFloor: el.minFloor,
+    maxFloor: el.maxFloor,
     direction: el.direction,
     doors: el.doors,
     moving: el.moving,
@@ -277,16 +333,18 @@ function snapshotElevator(el, capacity) {
   };
 }
 
-// One hall call per (floor, direction), kept in arrival order (oldest first).
+// One hall call per (current-floor, direction), kept in arrival order (oldest first).
+// A waiting rider is at `curOrigin` (their origin, or a sky-lobby they're transferring
+// at) and calls in the direction of their FINAL destination.
 function buildHallCalls(waiting) {
   const seen = new Set();
   const calls = [];
   for (const p of waiting) {
-    const direction = p.dest > p.origin ? 'up' : 'down';
-    const key = `${p.origin}:${direction}`;
+    const direction = p.finalDest > p.curOrigin ? 'up' : 'down';
+    const key = `${p.curOrigin}:${direction}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    calls.push({ floor: p.origin, direction });
+    calls.push({ floor: p.curOrigin, direction });
   }
   return calls;
 }

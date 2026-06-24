@@ -466,8 +466,14 @@ the docs panel, hints, and visual polish. Levels land in staged PRs:
   and the starter are now N-car aware (each waiting call is dispatched to the
   best-placed car, then each car runs its own strategy) and reduce exactly to
   the old single-car behavior when `numElevators === 1`.
-- **6C:** zoned skyscraper — an elevator serves a floor subset; riders transfer at
-  a sky-lobby (engine range/transfer model + renderer zone shading).
+- **6C (done):** zoned skyscraper — per-car floor ranges (`level.elevators[i] =
+  {minFloor,maxFloor}`, zones tiling the building and overlapping on a shared
+  sky-lobby) + a sky-lobby transfer model (a car carries a rider only as far as its
+  range, dropping cross-building riders at the boundary to re-board the next zone's
+  car; tracked via `finalDest`/`curOrigin`/`legTarget`, leaving `origin`/`dest`
+  untouched so single-zone runs stay byte-identical). All references + starter became
+  range-aware. Renderer shades zones and marks the sky-lobby. Levels L10 (20-floor,
+  two zones) and L11 (24-floor, four-car capstone: two cars per zone).
 - later: onboarding tutorial, docs panel, tiered hints, polish.
 *DoD:* a new player can go from level 1 to the end with in-game guidance only.
 

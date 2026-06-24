@@ -35,13 +35,15 @@ function createController(config) {
     step(state) {
       const cars = state.elevators;
 
-      // Assign each waiting call to the nearest car that has room (ties -> lower index).
+      // Assign each waiting call to the nearest car that has room and whose zone
+      // covers it (ties -> lower index).
       const mine = cars.map(() => []);
       for (const call of state.hallCalls) {
         let pick = -1;
         let best = Infinity;
         cars.forEach((e, i) => {
           if (e.load >= e.capacity) return;
+          if (!serves(e, call)) return;
           const d = Math.abs(e.floor - call.floor);
           if (d < best) { best = d; pick = i; }
         });
@@ -74,6 +76,14 @@ function createController(config) {
       });
     },
   };
+}
+
+// On a zoned level a car only covers floors in [minFloor, maxFloor], and can only
+// take a rider their way if there's room to move that way inside its range. On a
+// full-height level this is always true, so behavior is unchanged.
+function serves(e, call) {
+  if (call.floor < e.minFloor || call.floor > e.maxFloor) return false;
+  return call.direction === 'up' ? call.floor < e.maxFloor : call.floor > e.minFloor;
 }`;
 
 export const createController = compileController(source);
