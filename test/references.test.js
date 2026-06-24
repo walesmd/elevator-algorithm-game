@@ -117,5 +117,34 @@ const L2 = getLevel('l2');
   }
 }
 
+// --- 6. N-car awareness: every reference + the starter drive all cars (6B) ---
+// Today's curriculum includes multi-car levels. A reference that only ever drives
+// car 0 would leave the rest asleep; prove each one issues a real (non-IDLE)
+// command for a car beyond index 0 at some tick on a multi-car level.
+{
+  const multi = levels.filter((L) => (L.numElevators ?? 1) > 1);
+  assert(multi.length >= 1, 'the curriculum has at least one multi-elevator level');
+
+  const drivesEveryCar = (factory, L) => {
+    const tr = runSimulation(L, L.seeds[0], factory, { trace: true }).trace;
+    return tr.some((x) => x.elevator > 0 && x.action !== 'IDLE');
+  };
+
+  // Pick the busiest multi-car level (most cars) for the strongest signal.
+  const L = multi.reduce((a, b) => (b.numElevators > a.numElevators ? b : a));
+  for (const g of gallery) {
+    assert(drivesEveryCar(g.createController, L), `${g.id} drives cars beyond index 0 on ${L.id} (N-car aware)`);
+  }
+  assert(drivesEveryCar(compileController(STARTER_CODE), L), `the starter drives cars beyond index 0 on ${L.id} (multi-car starter)`);
+
+  // The N=1 path is unchanged: each reference still drives the single car on L1.
+  for (const g of gallery) {
+    assert(
+      runSimulation(L1, 1, g.createController).metrics.deliveredAll,
+      `${g.id} still delivers everyone on the single-car L1 (N=1 path intact)`
+    );
+  }
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

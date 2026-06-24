@@ -13,40 +13,59 @@ import { compileController } from '../sandbox/compile.js';
 export const meta = {
   id: 'fcfs',
   name: 'First-Come, First-Served (FCFS)',
-  concept: 'Greedy baseline — serve calls strictly in arrival order, one at a time.',
+  concept: 'Naive baseline — each car drives one errand at a time, oldest calls first; extra cars just split the calls so two never chase the same one.',
   blurb:
-    'The simplest fair rule: handle one request at a time, in the order it arrived. ' +
-    'Easy to reason about, but it backtracks across the building a lot.',
+    'The simplest fair rule: each car handles one request at a time, in the order it arrived, ' +
+    'and a second car just takes the calls the first one isn\'t going for. Easy to reason about, ' +
+    'but every car backtracks across the building a lot.',
   spoiler: false, // the sanctioned strawman, not a solution
 };
 
 export const source = `// First-Come, First-Served (FCFS): the naive baseline.
-// Pick ONE target and drive straight to it, ignoring everyone you pass:
+// Each car picks ONE errand and drives straight to it, ignoring everyone it
+// passes along the way:
 //   - carrying riders? go drop the nearest one off;
-//   - otherwise, go answer the OLDEST waiting hall call.
-// When we open the doors we tell the engine which direction we're serving (the
+//   - otherwise, go answer a waiting hall call — oldest calls first.
+// With more than one car the only "coordination" is that two cars never claim
+// the same call: each waiting call goes to the nearest car that is still free.
+// When a car opens its doors it tells the engine which direction it's serving (a
 // real car shows an arrow), so only riders going that way board.
 function createController(config) {
   return {
     step(state) {
-      const e = state.elevators[0];
-      if (!e.ready) return [{ action: 'IDLE' }]; // busy: let the physics finish
+      const cars = state.elevators;
 
-      let target = null;
-      let serving = null;
-      if (e.load > 0) {
-        target = nearest(e.floor, e.carCalls);        // drop a rider we already have
-        serving = target > e.floor ? 'up' : 'down';
-      } else if (state.hallCalls.length > 0) {
-        const call = state.hallCalls[0];               // answer the oldest call,
-        target = call.floor;
-        serving = call.direction;                      // serving the way they want to go
+      // Each car's errand for this tick: a { floor, serving } target, or null.
+      // A car already carrying riders is committed to dropping the nearest one.
+      const target = cars.map((e) => {
+        if (e.load === 0) return null;
+        const floor = nearest(e.floor, e.carCalls);
+        return { floor, serving: floor > e.floor ? 'up' : 'down' };
+      });
+
+      // Hand each still-free car a waiting call, oldest first, to its nearest car.
+      // (Naive, but it keeps two cars from chasing the very same call.)
+      for (const call of state.hallCalls) {
+        let pick = -1;
+        let bestDist = Infinity;
+        cars.forEach((e, i) => {
+          if (target[i]) return;                       // already busy with an errand
+          const d = Math.abs(e.floor - call.floor);
+          if (d < bestDist) { bestDist = d; pick = i; }
+        });
+        if (pick === -1) break;                        // every car already has an errand
+        target[pick] = { floor: call.floor, serving: call.direction };
       }
 
-      if (target == null) return [{ action: 'IDLE' }];
-      if (e.floor < target) return [{ action: 'MOVE_UP' }];
-      if (e.floor > target) return [{ action: 'MOVE_DOWN' }];
-      return [{ action: 'STOP', serving }]; // arrived: drop off and/or pick up here
+      // Turn each car's errand into one command (drive toward it, then stop).
+      return cars.map((e, i) => {
+        if (!e.ready) return { action: 'IDLE' };       // busy: let the physics finish
+        const t = target[i];
+        if (!t) return { action: 'IDLE' };
+        if (e.floor < t.floor) return { action: 'MOVE_UP' };
+        if (e.floor > t.floor) return { action: 'MOVE_DOWN' };
+        return { action: 'STOP', serving: t.serving }; // arrived: drop off and/or pick up
+      });
     },
   };
 }
