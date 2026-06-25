@@ -72,11 +72,15 @@ What works today:
   they diverge, a per-level **concept note** that names the CS idea and links out, a
   first-run **onboarding** overlay, and **worked reference explanations** earned by
   clearing a level.
+- **Bonus levels** (Phase 8): two always-open "elevators that go sideways" levels on a
+  2-D grid — *The Great Glass Elevator* (one free-roaming car) and *Gringotts* (three
+  carts) — where a car moves left/right as well as up/down. Grid-aware references
+  anchor their stars; a dedicated grid renderer draws the 2-D building.
 - Passing headless tests (`simulation`, `recording`, `phase3`, `references`,
-  `progression`, `analyzer`, `compare`, `content`).
+  `progression`, `analyzer`, `compare`, `content`, `grid`).
 
-Not yet built: **Phase 8** sharing/challenge stretch features — ghost/replay URL
-sharing and a daily-seed challenge.
+All eight phases are built. (The original "sharing & challenge" Phase 8 was retired in
+favor of the sideways-elevator bonus levels.)
 
 ## Run it
 

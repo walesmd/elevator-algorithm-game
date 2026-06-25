@@ -14,8 +14,13 @@
 export function isUnlocked(levels, id, getStars) {
   const idx = levels.findIndex((l) => l.id === id);
   if (idx < 0) return false; // unknown level
+  if (levels[idx].bonus) return true; // bonus levels are always open — just for fun
   if (idx === 0) return true; // the first level is always open
-  return (getStars(levels[idx - 1].id) || 0) >= 1;
+  // A bonus level never gates the curriculum: skip back over any to the prior real level.
+  let prev = idx - 1;
+  while (prev >= 0 && levels[prev].bonus) prev--;
+  if (prev < 0) return true;
+  return (getStars(levels[prev].id) || 0) >= 1;
 }
 
 /** How many levels are currently open (handy for "world" gates / progress UI). */

@@ -49,6 +49,10 @@ const C = {
  * @param {object} level - level definition (floors, cars, capacity, timing)
  */
 export function createRenderer(canvas, level) {
+  // 2-D bonus levels get a dedicated grid renderer; the vertical-shaft renderer below
+  // is untouched for the curriculum.
+  if ((level.numCols ?? 1) > 1) return createGridRenderer(canvas, level);
+
   const ctx = canvas.getContext('2d');
   const F = level.numFloors;
   const N = level.numElevators ?? 1;
@@ -429,6 +433,212 @@ export function createRenderer(canvas, level) {
 
   resize();
   return { draw, drawEmpty, resize };
+}
+
+// --- 2-D grid renderer (Phase 8 bonus levels) ------------------------------------
+// A building that's floors × columns: a lattice of rooms, cars that slide both ways,
+// waiting riders warming with their wait, and faint dots marking each car's drop-offs.
+// Same interface as the shaft renderer: draw(a, b, alpha) / drawEmpty() / resize().
+function createGridRenderer(canvas, level) {
+  const ctx = canvas.getContext('2d');
+  const F = level.numFloors;
+  const COLS = level.numCols;
+  const N = level.numElevators ?? 1;
+  const sweep = (F + COLS) * (level.ticksPerFloor ?? 2);
+  const warnTicks = level.starve?.warn ?? sweep * 2;
+  const redTicks = level.starve?.red ?? sweep * 4;
+  // A distinct hue per car so several carts are tellable apart.
+  const carHues = ['#4cc2ff', '#b98bff', '#7fd6a8', '#ffcf6b'];
+
+  let W = 0;
+  let H = 0;
+  let geo = null;
+
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const rect = canvas.getBoundingClientRect();
+    W = Math.max(300, Math.floor(rect.width));
+    H = Math.max(240, Math.floor(rect.height));
+    canvas.width = Math.floor(W * dpr);
+    canvas.height = Math.floor(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    computeGeo();
+  }
+
+  function computeGeo() {
+    const padTop = 12;
+    const padBottom = 12;
+    const padLeft = 22; // floor labels
+    const padRight = 12;
+    const gridW = Math.max(40, W - padLeft - padRight);
+    const gridH = Math.max(40, H - padTop - padBottom);
+    geo = {
+      padTop,
+      padLeft,
+      cellW: gridW / COLS,
+      cellH: gridH / F,
+      gridW,
+      gridH,
+    };
+  }
+
+  const xOf = (col) => geo.padLeft + (col + 0.5) * geo.cellW; // centre x of a column
+  const yOf = (floor) => H - 12 - (floor + 0.5) * geo.cellH; // centre y of a floor (0 at bottom)
+
+  function clear() {
+    ctx.clearRect(0, 0, W, H);
+  }
+
+  function drawGrid() {
+    const left = geo.padLeft;
+    const top = geo.padTop;
+    // Cells: a subtle checker so columns read as distinct rooms.
+    for (let f = 0; f < F; f++) {
+      for (let c = 0; c < COLS; c++) {
+        const x = left + c * geo.cellW;
+        const y = yOf(f) - geo.cellH / 2;
+        ctx.fillStyle = (f + c) % 2 === 0 ? 'rgba(255,255,255,0.018)' : 'rgba(255,255,255,0.04)';
+        ctx.fillRect(x, y, geo.cellW, geo.cellH);
+      }
+    }
+    // Grid lines.
+    ctx.strokeStyle = C.line || '#1d2731';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let f = 0; f <= F; f++) {
+      const y = Math.round(H - 12 - f * geo.cellH) + 0.5;
+      ctx.moveTo(left, y);
+      ctx.lineTo(left + geo.gridW, y);
+    }
+    for (let c = 0; c <= COLS; c++) {
+      const x = Math.round(left + c * geo.cellW) + 0.5;
+      ctx.moveTo(x, top);
+      ctx.lineTo(x, top + geo.gridH);
+    }
+    ctx.stroke();
+    // Floor labels down the left gutter.
+    ctx.fillStyle = '#5d6b77';
+    ctx.font = '600 10px ui-monospace, SFMono-Regular, Menlo, monospace';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    for (let f = 0; f < F; f++) ctx.fillText(String(f), left - 4, yOf(f));
+  }
+
+  function waitColor(w) {
+    if (w >= redTicks) return '#ff5d52';
+    if (w >= warnTicks) return '#ffcf6b';
+    return '#74b6cf';
+  }
+
+  // Waiting riders, grouped by cell, drawn as warm-with-wait pips with a +N overflow.
+  function drawWaiting(waiting) {
+    const byCell = new Map();
+    for (const p of waiting) {
+      const k = `${p.floor}:${p.col}`;
+      if (!byCell.has(k)) byCell.set(k, []);
+      byCell.get(k).push(p);
+    }
+    const r = Math.max(2, Math.min(4, geo.cellH * 0.12));
+    for (const [, people] of byCell) {
+      const cx = xOf(people[0].col);
+      const cy = yOf(people[0].floor);
+      const per = Math.max(1, Math.floor((geo.cellW * 0.7) / (r * 2 + 2)));
+      const shown = Math.min(people.length, per);
+      const startX = cx - ((shown - 1) * (r * 2 + 2)) / 2;
+      for (let k = 0; k < shown; k++) {
+        ctx.beginPath();
+        ctx.arc(startX + k * (r * 2 + 2), cy + geo.cellH * 0.28, r, 0, Math.PI * 2);
+        ctx.fillStyle = waitColor(people[people.length - 1 - k].wait);
+        ctx.fill();
+      }
+      if (people.length > shown) {
+        ctx.fillStyle = '#5d6b77';
+        ctx.font = '9px ui-monospace, monospace';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`+${people.length - shown}`, startX + shown * (r * 2 + 2), cy + geo.cellH * 0.28);
+      }
+    }
+  }
+
+  // A car's planned drop-offs, as faint dots in the car's hue.
+  function drawCarCalls(ev, hue) {
+    ctx.fillStyle = hue;
+    ctx.globalAlpha = 0.5;
+    for (const c of ev.carCalls) {
+      ctx.beginPath();
+      ctx.arc(xOf(c.col), yOf(c.floor) - geo.cellH * 0.28, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawCar(posF, posC, load, capacity, hue, doorOpen) {
+    const cw = Math.min(geo.cellW * 0.6, 60);
+    const ch = Math.min(geo.cellH * 0.6, 48);
+    const x = geo.padLeft + (posC + 0.5) * geo.cellW - cw / 2;
+    const y = H - 12 - (posF + 0.5) * geo.cellH - ch / 2;
+    const grad = ctx.createLinearGradient(x, y, x, y + ch);
+    grad.addColorStop(0, hue);
+    grad.addColorStop(1, shade(hue, -0.25));
+    ctx.fillStyle = grad;
+    roundRect(ctx, x, y, cw, ch, 6);
+    ctx.fill();
+    ctx.strokeStyle = shade(hue, -0.4);
+    ctx.lineWidth = 1.5;
+    roundRect(ctx, x + 0.5, y + 0.5, cw - 1, ch - 1, 6);
+    ctx.stroke();
+    // doorOpen brightens the cabin briefly so a pickup/drop is visible.
+    if (doorOpen > 0.3) {
+      ctx.fillStyle = 'rgba(255,255,255,0.18)';
+      roundRect(ctx, x + 4, y + 4, cw - 8, ch - 8, 4);
+      ctx.fill();
+    }
+    ctx.fillStyle = '#04222f';
+    ctx.font = '700 10px ui-monospace, SFMono-Regular, Menlo, monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`${load}/${capacity}`, x + cw / 2, y + ch / 2);
+  }
+
+  function draw(a, b, alpha = 0) {
+    if (!geo) resize();
+    clear();
+    drawGrid();
+    if (!a) return;
+    const next = b || a;
+    const t = next === a ? 0 : alpha;
+    drawWaiting(a.waiting);
+    a.elevators.forEach((ev, i) => {
+      const evB = next.elevators[i] || ev;
+      const posF = ev.posF + (evB.posF - ev.posF) * t;
+      const posC = ev.posC + (evB.posC - ev.posC) * t;
+      const doorOpen = ev.doorOpen + (evB.doorOpen - ev.doorOpen) * t;
+      const hue = carHues[i % carHues.length];
+      drawCarCalls(ev, hue);
+      drawCar(posF, posC, ev.load, ev.capacity, hue, doorOpen);
+    });
+  }
+
+  function drawEmpty() {
+    if (!geo) resize();
+    clear();
+    drawGrid();
+    for (let i = 0; i < N; i++) drawCar(0, 0, 0, level.capacity ?? 8, carHues[i % carHues.length], 0);
+  }
+
+  resize();
+  return { draw, drawEmpty, resize };
+}
+
+// Lighten (+) or darken (-) a #rrggbb hex by a fraction.
+function shade(hex, amt) {
+  const n = parseInt(hex.slice(1), 16);
+  const ch = (sh) => {
+    const v = Math.round(((n >> sh) & 255) * (1 + amt));
+    return Math.max(0, Math.min(255, v));
+  };
+  return `rgb(${ch(16)},${ch(8)},${ch(0)})`;
 }
 
 function clamp(v, lo, hi) {

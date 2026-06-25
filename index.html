@@ -22,6 +22,12 @@
       #level-bar .lvl-stars { font-size:11px; letter-spacing:1px; color:#e6b072; margin-left:3px; }
       #level-bar button.active .lvl-stars { color:#ffcf6b; }
       #level-bar .lvl-lock { font-size:11px; margin-left:3px; }
+      /* Bonus levels: always open, set apart with a divider and a warm accent. */
+      #level-bar .lvl-sep { align-self:center; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.08em; margin-left:6px; padding-left:10px; border-left:1px solid var(--line); }
+      #level-bar button.bonus { border-color:#3a3050; color:#d9c7ff; }
+      #level-bar button.bonus:hover { border-color:#b98bff; }
+      #level-bar button.bonus.active { border-color:#b98bff; color:#d9c7ff; }
+      #level-bar button.bonus .lvl-stars { color:#b98bff; }
       /* Transient "level unlocked" toast */
       .toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(16px);
                background:#10242e; color:var(--ink); border:1px solid var(--accent); border-radius:8px;

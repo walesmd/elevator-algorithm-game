@@ -209,13 +209,19 @@ function populateGallery() {
     .join('');
 }
 
+// The starter for a level — bonus (grid) levels ship their own; everyone else gets
+// the standard one.
+function starterFor(level) {
+  return level.starter || STARTER_CODE;
+}
+
 // True unless the editor holds custom work that an overwrite would destroy. Lets
 // Insert/Reset replace freely when there's nothing to lose, and ask first when
 // there is. (Edits are also autosaved per level, so level-switching never loses
 // work; this guards only the deliberate replace actions.)
 function safeToReplaceEditor() {
   const cur = editor.getValue().trim();
-  if (cur === '' || cur === STARTER_CODE.trim()) return true;
+  if (cur === '' || cur === STARTER_CODE.trim() || cur === starterFor(currentLevel).trim()) return true;
   if (gallery.some((g) => g.source.trim() === cur)) return true;
   return typeof confirm !== 'function' || confirm('Replace the code in the editor? Your current version will be overwritten.');
 }
@@ -413,13 +419,25 @@ function renderLevelBar() {
   const focusedId = els.levelBar.contains(document.activeElement) ? document.activeElement.dataset.id : null;
   els.levelBar.replaceChildren();
   levels.forEach((level, idx) => {
+    // A "Bonus" divider before the always-open bonus group.
+    if (level.bonus && (idx === 0 || !levels[idx - 1].bonus)) {
+      const sep = document.createElement('span');
+      sep.className = 'lvl-sep';
+      sep.textContent = 'Bonus';
+      sep.setAttribute('aria-hidden', 'true'); // decorative; each button carries its own label
+      els.levelBar.appendChild(sep);
+    }
     const unlocked = isUnlocked(levels, level.id, starsOf);
-    const name = level.name.split('—')[0].trim();
+    // Curriculum buttons read "Level N"; bonus buttons read their themed name.
+    const name = level.bonus
+      ? level.name.split('—').slice(1).join('—').trim()
+      : level.name.split('—')[0].trim();
     const isActive = level.id === currentLevel.id;
     const btn = document.createElement('button');
     btn.className = 'lvl';
     btn.dataset.id = level.id;
     btn.classList.toggle('active', isActive);
+    btn.classList.toggle('bonus', !!level.bonus);
     if (isActive) btn.setAttribute('aria-current', 'page'); // mark the current level (not colour-only)
     if (unlocked) {
       const s = starsOf(level.id);
@@ -457,10 +475,13 @@ function selectLevel(level) {
   renderBrief(els.brief, level);
   hintState = { revealed: 0, runHint: null }; // hints are per-level; start fresh
   renderHints(els.hints, level, hintState);
-  editor.setValue(loadCode(level.id) || STARTER_CODE);
+  editor.setValue(loadCode(level.id) || starterFor(level));
   els.results.innerHTML = '<p class="hint">Press Run to score your algorithm and watch it drive the building.</p>';
   els.comparison.innerHTML = ''; // stale: it was for the previous level
   closeCompare(); // the A/B view was for the previous level's geometry/traffic
+  // The reference gallery + A/B compare are the up/down scheduling algorithms; they
+  // don't apply to the 2-D bonus levels, so hide that whole panel there.
+  els.gallery.hidden = (level.numCols ?? 1) > 1;
   renderLevelBar();
   // Build a renderer sized for THIS level's geometry, then show the static building.
   viz.renderer = createRenderer(els.canvas, level);
@@ -507,8 +528,9 @@ function bindControls() {
 
   els.resetBtn.addEventListener('click', () => {
     if (!safeToReplaceEditor()) return;
-    editor.setValue(STARTER_CODE);
-    saveCode(currentLevel.id, STARTER_CODE);
+    const code = starterFor(currentLevel);
+    editor.setValue(code);
+    saveCode(currentLevel.id, code);
     editor.focus();
   });
 

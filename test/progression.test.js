@@ -28,12 +28,24 @@ const starsFrom = (map) => (id) => map[id] || 0;
   const threeStar = starsFrom({ [l1.id]: 3 });
   assert(isUnlocked(levels, l2.id, threeStar), 'more stars on level 1 keeps level 2 unlocked');
 
-  assert(unlockedCount(levels, none) === 1, 'with no progress, exactly one level is open');
-  // Clearing level 1 opens the NEXT level only — the ladder unlocks one rung at a
-  // time (don't assume the total level count).
-  assert(unlockedCount(levels, oneStar) === Math.min(2, levels.length), 'clearing level 1 opens exactly the next level');
-  if (levels.length >= 3) {
-    assert(!isUnlocked(levels, levels[2].id, oneStar), 'level 3 stays locked until level 2 is cleared');
+  // Bonus levels are ALWAYS open and sit outside the ladder, so count only the
+  // curriculum rungs when checking the one-at-a-time unlock rule.
+  const curriculum = levels.filter((l) => !l.bonus);
+  const bonusCount = levels.length - curriculum.length;
+  const openCurriculum = (stars) => curriculum.reduce((n, l) => n + (isUnlocked(levels, l.id, stars) ? 1 : 0), 0);
+
+  assert(openCurriculum(none) === 1, 'with no progress, exactly one curriculum level is open');
+  assert(unlockedCount(levels, none) === 1 + bonusCount, 'with no progress, level 1 plus the bonus levels are open');
+  // Clearing level 1 opens the NEXT curriculum level only — the ladder unlocks one
+  // rung at a time.
+  assert(openCurriculum(oneStar) === Math.min(2, curriculum.length), 'clearing level 1 opens exactly the next curriculum level');
+  if (curriculum.length >= 3) {
+    assert(!isUnlocked(levels, curriculum[2].id, oneStar), 'level 3 stays locked until level 2 is cleared');
+  }
+
+  // Every bonus level is open regardless of progress.
+  for (const b of levels.filter((l) => l.bonus)) {
+    assert(isUnlocked(levels, b.id, none), `bonus level ${b.id} is open with no progress`);
   }
 }
 
