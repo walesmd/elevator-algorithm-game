@@ -25,6 +25,7 @@ import { mulberry32, randInt } from './rng.js';
 export function generatePassengers(level, seed) {
   const rng = mulberry32(seed);
   const { numFloors } = level;
+  const numCols = level.numCols ?? 1; // > 1 only on the 2-D "sideways" bonus levels
   const spawn = level.spawn || { type: 'uniform', count: 10, firstTick: 0, lastTick: 200 };
   const count = spawn.count;
   const first = spawn.firstTick ?? 0;
@@ -36,6 +37,39 @@ export function generatePassengers(level, seed) {
     const spawnTick = first + randInt(rng, Math.max(1, last - first + 1));
     let origin;
     let dest;
+
+    // 2-D bonus levels (a building that's floors × columns). Generated in its own
+    // branch so it never touches — and never perturbs the seeded RNG of — the
+    // one-dimensional levels, which keep generating exactly as before.
+    if (numCols > 1) {
+      let oF;
+      let oC;
+      let dF;
+      let dC;
+      if (spawn.type === 'vault') {
+        // Lobby-centric in 2-D: most trips run between the lobby cell (floor 0,
+        // column 0) and a "vault" somewhere in the grid, either direction.
+        const vF = randInt(rng, numFloors);
+        const vC = 1 + randInt(rng, numCols - 1); // a vault is never the lobby column
+        if (rng() < lobbyBias) {
+          if (rng() < 0.5) { oF = 0; oC = 0; dF = vF; dC = vC; }
+          else { oF = vF; oC = vC; dF = 0; dC = 0; }
+        } else {
+          oF = randInt(rng, numFloors); oC = randInt(rng, numCols);
+          dF = randInt(rng, numFloors); dC = randInt(rng, numCols);
+        }
+      } else {
+        // 'grid': anywhere to anywhere.
+        oF = randInt(rng, numFloors); oC = randInt(rng, numCols);
+        dF = randInt(rng, numFloors); dC = randInt(rng, numCols);
+      }
+      // No zero-distance trips: a destination must differ from the origin CELL (it's
+      // fine for it to share a floor, as long as the column differs — that's a
+      // horizontal-only ride, which is the whole point here).
+      while (oF === dF && oC === dC) { dF = randInt(rng, numFloors); dC = randInt(rng, numCols); }
+      people.push({ id: i, origin: oF, dest: dF, originCol: oC, destCol: dC, spawnTick, pickupTick: null, dropTick: null });
+      continue;
+    }
 
     if (spawn.type === 'up-peak') {
       origin = rng() < lobbyBias ? 0 : randInt(rng, numFloors);

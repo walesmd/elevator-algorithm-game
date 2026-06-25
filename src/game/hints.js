@@ -55,6 +55,14 @@ const HINTS = {
     concept: 'Two cars per zone AND a sky-lobby transfer at once: within a zone you again choose which car takes which call, and cross-zone riders still change cars at the shared floor.',
     technique: 'Put it all together: split calls between the two cars in each zone, keep every car inside its range, and route cross-zone riders through the sky-lobby.',
   },
+  b1: {
+    concept: 'A car now has a column as well as a floor, and two extra moves (MOVE_LEFT / MOVE_RIGHT). Picking where to go is routing on a 2-D grid instead of a line.',
+    technique: 'Drive toward the nearest pending cell by grid (Manhattan) distance, and pick up anyone whose cell you pass through — don’t make a dedicated trip per rider.',
+  },
+  b2: {
+    concept: 'Three carts share one 2-D grid, and most fares touch the lobby corner. The new question is which cart takes which fare so they don’t all converge.',
+    technique: 'Assign each waiting cell to the nearest free cart, and have each cart serve the nearest stop among its pickups and drop-offs — grabbing riders on the way.',
+  },
 };
 
 const FALLBACK = {

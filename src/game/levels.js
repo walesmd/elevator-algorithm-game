@@ -17,6 +17,8 @@
 //   weights: how the composite score trades off wait / journey / distance
 //   brief: the player-facing card — says WHAT to do, never HOW.
 
+import { GRID_STARTER_CODE } from './starter.js';
+
 export const levels = [
   {
     id: 'l1',
@@ -248,6 +250,54 @@ export const levels = [
       constraint: 'Two cars now cover each zone, so within a zone you again choose which car answers which call — and a rider crossing zones still transfers at the shared floor.',
       measured: 'Average wait and journey time, and that everyone arrives.',
       bar: 'Everything at once: split the calls between the two cars in each zone so they don’t bunch, keep every car inside its range, and route cross-zone riders through the sky-lobby.',
+    },
+  },
+
+  // --- Bonus: elevators that go sideways (Phase 8). Always unlocked; just for fun. ---
+  {
+    id: 'b1',
+    name: 'Bonus — The Great Glass Elevator',
+    bonus: true,
+    numFloors: 5,
+    numCols: 5,
+    numElevators: 1,
+    capacity: 6,
+    ticksPerFloor: 2,
+    doorTicks: 2,
+    timeLimit: 4000,
+    spawn: { type: 'grid', count: 16, firstTick: 0, lastTick: 160 },
+    seeds: [1, 2, 3, 4, 5],
+    weights: { wait: 1, journey: 0.5, distance: 0.1, undelivered: 1000 },
+    starter: GRID_STARTER_CODE,
+    brief: {
+      situation: 'A glass elevator that goes “sideways and slantways and longways” — a 5×5 grid of rooms, and one car that can roam anywhere in it.',
+      goal: 'Deliver everyone, wherever they are and wherever they’re going.',
+      constraint: 'The car has a column as well as a floor: you now also command MOVE_LEFT / MOVE_RIGHT. A stop picks up whoever shares the car’s cell.',
+      measured: 'Average wait and journey time, and whether everyone arrives.',
+      bar: 'One free-roaming car. The win is the same as always — don’t make a separate trip for every rider when you could grab them on the way past.',
+    },
+  },
+  {
+    id: 'b2',
+    name: 'Bonus — Gringotts',
+    bonus: true,
+    numFloors: 8,
+    numCols: 7,
+    numElevators: 3,
+    capacity: 4,
+    ticksPerFloor: 2,
+    doorTicks: 2,
+    timeLimit: 6000,
+    spawn: { type: 'vault', count: 48, firstTick: 0, lastTick: 320 },
+    seeds: [1, 2, 3, 4, 5],
+    weights: { wait: 1, journey: 0.5, distance: 0.1, undelivered: 1000 },
+    starter: GRID_STARTER_CODE,
+    brief: {
+      situation: 'The Gringotts mine: three carts rattling around a deep 8×7 grid of vaults, with goblins and guests shuttling to and from the lobby.',
+      goal: 'Keep the queues short and get everyone to their vault (or back to the lobby).',
+      constraint: 'Three carts on a 2-D grid (up/down AND left/right). Most trips touch the lobby in the corner; deciding which cart takes which fare is the whole game.',
+      measured: 'Average wait and journey time, and that everyone arrives.',
+      bar: 'Three carts, one grid. Split the work so they cover different vaults, and grab riders on the way rather than criss-crossing the mine empty.',
     },
   },
 ];

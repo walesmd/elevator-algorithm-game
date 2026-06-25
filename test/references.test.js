@@ -23,6 +23,12 @@ function assert(cond, msg) {
 const L1 = getLevel('l1');
 const L2 = getLevel('l2');
 
+// The gallery references (FCFS/SSTF/SCAN/LOOK) only move up and down, so they apply to
+// the one-dimensional curriculum levels. The 2-D "sideways" bonus levels anchor on
+// their own grid references (see grid.test.js); exclude them from the 1-D checks.
+const curriculum = levels.filter((L) => !((L.numCols ?? 1) > 1));
+const starterFor = (L) => compileController(L.starter || STARTER_CODE);
+
 // --- 1. Roster shape --------------------------------------------------------
 {
   assert(gallery.length === 4, 'gallery has four reference algorithms');
@@ -62,9 +68,9 @@ const L2 = getLevel('l2');
   assert(allMatch, 'each `source` recompiles to the same behavior as its createController (no drift)');
 }
 
-// --- 4. Every reference delivers everyone on EVERY level (refs must work) ----
+// --- 4. Every reference delivers everyone on every curriculum level (refs must work) -
 {
-  for (const L of levels) {
+  for (const L of curriculum) {
     for (const g of gallery) {
       const ok = L.seeds.every((s) => runSimulation(L, s, g.createController).metrics.deliveredAll);
       assert(ok, `${g.id} delivers everyone on ${L.id} (all seeds)`);
@@ -81,21 +87,23 @@ const L2 = getLevel('l2');
   const starter = compileController(STARTER_CODE);
   const controllers = [...gallery.map((g) => ({ id: g.id, c: g.createController })), { id: 'starter', c: starter }];
   let stranded = 0;
-  for (const L of levels) {
+  for (const L of curriculum) {
     for (const { c } of controllers) {
       for (let s = 1; s <= 60; s++) if (!runSimulation(L, s, c).metrics.deliveredAll) stranded++;
     }
   }
-  assert(stranded === 0, `references + starter deliver everyone across seeds 1-60 on every level (${levels.length * controllers.length * 60} runs)`);
+  assert(stranded === 0, `references + starter deliver everyone across seeds 1-60 on every curriculum level (${curriculum.length * controllers.length * 60} runs)`);
+  // The shipped starter (whichever variant the level uses) must clear EVERY level,
+  // bonus levels included, so a player's first run never strands anyone.
   let starterClears = true;
-  for (const L of levels) if (scoreLevel(L, starter).stars < 1) starterClears = false;
-  assert(starterClears, 'the starter clears (>= 1 star) on every level');
+  for (const L of levels) if (scoreLevel(L, starterFor(L)).stars < 1) starterClears = false;
+  assert(starterClears, 'the per-level starter clears (>= 1 star) on every level (curriculum + bonus)');
 }
 
-// --- 4b. Par is sane on every level: FCFS clears (>=1 star) and is beaten by ---
-// LOOK (3 stars), so the 1-star baseline and 3-star par bracket every level.
+// --- 4b. Par is sane on every curriculum level: FCFS clears (>=1 star) and is beaten
+// by LOOK (3 stars), so the 1-star baseline and 3-star par bracket every level.
 {
-  for (const L of levels) {
+  for (const L of curriculum) {
     const fcfs = scoreLevel(L, gallery.find((g) => g.id === 'fcfs').createController);
     const look = scoreLevel(L, gallery.find((g) => g.id === 'look').createController);
     assert(fcfs.stars >= 1, `${L.id}: FCFS clears the level (>= 1 star)`);
@@ -122,7 +130,7 @@ const L2 = getLevel('l2');
 // car 0 would leave the rest asleep; prove each one issues a real (non-IDLE)
 // command for a car beyond index 0 at some tick on a multi-car level.
 {
-  const multi = levels.filter((L) => (L.numElevators ?? 1) > 1);
+  const multi = curriculum.filter((L) => (L.numElevators ?? 1) > 1);
   assert(multi.length >= 1, 'the curriculum has at least one multi-elevator level');
 
   const drivesEveryCar = (factory, L) => {

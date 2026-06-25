@@ -22,7 +22,7 @@
 import { generatePassengers } from './passengers.js';
 import { summarize } from './metrics.js';
 
-const ACTIONS = new Set(['MOVE_UP', 'MOVE_DOWN', 'STOP', 'IDLE']);
+const ACTIONS = new Set(['MOVE_UP', 'MOVE_DOWN', 'MOVE_LEFT', 'MOVE_RIGHT', 'STOP', 'IDLE']);
 
 /**
  * Run one deterministic simulation.
@@ -39,6 +39,11 @@ export function runSimulation(level, seed, createController, opts = {}) {
   const ticksPerFloor = level.ticksPerFloor ?? 2;
   const doorTicks = level.doorTicks ?? 2;
   const timeLimit = level.timeLimit ?? 600;
+  // 2-D "sideways" bonus levels: the building is `numCols` columns wide and a car can
+  // move left/right as well as up/down. `grid` gates every new behavior; with no
+  // numCols (or 1) the world is a single column and behaves exactly as before.
+  const numCols = level.numCols ?? 1;
+  const grid = numCols > 1;
   const wantTrace = !!opts.trace;
   // Recording captures a full visual snapshot of the world every tick so the
   // renderer can replay the run (smoothly, decoupled from ticks) without re-running
@@ -95,13 +100,17 @@ export function runSimulation(level, seed, createController, opts = {}) {
   const elevators = Array.from({ length: numElevators }, (_, i) => ({
     index: i,
     floor: ranges[i].lo, // a car starts at the bottom of its own range (lobby / sky-lobby)
+    col: 0, // 2-D bonus levels: horizontal position; always 0 in a one-column building
     minFloor: ranges[i].lo,
     maxFloor: ranges[i].hi,
+    minCol: 0,
+    maxCol: numCols - 1,
     direction: 'idle',
     doors: 'closed',
     moving: false,
     travelRemaining: 0,
-    pendingDir: 0,
+    pendingDir: 0, // floor delta in flight (+1/-1)
+    pendingCol: 0, // column delta in flight (+1/-1)
     doorRemaining: 0,
     onboard: [],
   }));
@@ -126,9 +135,11 @@ export function runSimulation(level, seed, createController, opts = {}) {
         el.travelRemaining--;
         if (el.travelRemaining === 0) {
           el.floor += el.pendingDir;
+          el.col += el.pendingCol;
           el.pendingDir = 0;
+          el.pendingCol = 0;
           el.moving = false;
-          distance++;
+          distance++; // one cell of travel, vertical OR horizontal
         }
       } else if (el.doorRemaining > 0) {
         el.doorRemaining--;
@@ -139,8 +150,8 @@ export function runSimulation(level, seed, createController, opts = {}) {
     // 3) Build the read-only snapshot the controller sees.
     const snapshot = {
       time,
-      elevators: elevators.map((el) => snapshotElevator(el, capacity)),
-      hallCalls: buildHallCalls(waiting),
+      elevators: elevators.map((el) => snapshotElevator(el, capacity, grid)),
+      hallCalls: grid ? buildHallCallsGrid(waiting) : buildHallCalls(waiting),
     };
 
     // 4) Ask the controller for commands.
@@ -167,24 +178,36 @@ export function runSimulation(level, seed, createController, opts = {}) {
         return;
       }
       if (action === 'MOVE_UP') {
-        if (el.floor < el.maxFloor) startMove(el, +1, ticksPerFloor);
+        if (el.floor < el.maxFloor) startMove(el, +1, 0, ticksPerFloor);
         else warn(`MOVE_UP ignored at top of its range (elevator ${i}, t=${time}).`);
       } else if (action === 'MOVE_DOWN') {
-        if (el.floor > el.minFloor) startMove(el, -1, ticksPerFloor);
+        if (el.floor > el.minFloor) startMove(el, -1, 0, ticksPerFloor);
         else warn(`MOVE_DOWN ignored at bottom of its range (elevator ${i}, t=${time}).`);
+      } else if (action === 'MOVE_LEFT') {
+        if (el.col > el.minCol) startMove(el, 0, -1, ticksPerFloor);
+        else warn(`MOVE_LEFT ignored at the left edge (elevator ${i}, t=${time}).`);
+      } else if (action === 'MOVE_RIGHT') {
+        if (el.col < el.maxCol) startMove(el, 0, +1, ticksPerFloor);
+        else warn(`MOVE_RIGHT ignored at the right edge (elevator ${i}, t=${time}).`);
       } else if (action === 'STOP') {
-        // Real direction-aware boarding: a car shows the direction it's committed to,
-        // and riders going the other way wait for the next car. An EXPLICIT `serving`
-        // is taken strictly (the algorithm owns that choice). Without one, the engine
-        // implies a direction from the car's travel direction — forgivingly, so a
-        // naive car can't wedge at a turnaround (see serviceStop).
-        const explicit = cmd.serving === 'up' || cmd.serving === 'down';
-        const serving = explicit
-          ? cmd.serving
-          : el.direction === 'up' || el.direction === 'down'
-            ? el.direction
-            : null;
-        delivered += serviceStop(el, waiting, capacity, time, serving, explicit);
+        if (grid) {
+          // 2-D boarding is simplified for fun: a stopped car picks up whoever is in
+          // its cell (no committed direction — there's no natural "up/down" here).
+          delivered += serviceStopGrid(el, waiting, capacity, time);
+        } else {
+          // Real direction-aware boarding: a car shows the direction it's committed to,
+          // and riders going the other way wait for the next car. An EXPLICIT `serving`
+          // is taken strictly (the algorithm owns that choice). Without one, the engine
+          // implies a direction from the car's travel direction — forgivingly, so a
+          // naive car can't wedge at a turnaround (see serviceStop).
+          const explicit = cmd.serving === 'up' || cmd.serving === 'down';
+          const serving = explicit
+            ? cmd.serving
+            : el.direction === 'up' || el.direction === 'down'
+              ? el.direction
+              : null;
+          delivered += serviceStop(el, waiting, capacity, time, serving, explicit);
+        }
         el.doors = 'open';
         el.doorRemaining = doorTicks;
       } else {
@@ -196,7 +219,11 @@ export function runSimulation(level, seed, createController, opts = {}) {
     // 6) Record the end-of-tick world for replay (after commands have taken effect:
     //    a STOP shows open doors and updated load; a MOVE has begun advancing pos).
     if (wantRecord) {
-      frames.push(recordFrame(time, elevators, waiting, capacity, ticksPerFloor, delivered, total, distance));
+      frames.push(
+        grid
+          ? recordFrameGrid(time, elevators, waiting, capacity, ticksPerFloor, delivered, total, distance)
+          : recordFrame(time, elevators, waiting, capacity, ticksPerFloor, delivered, total, distance)
+      );
     }
 
     time++;
@@ -240,11 +267,72 @@ function recordFrame(time, elevators, waiting, capacity, ticksPerFloor, delivere
   return { t: time, delivered, total, distance, riding, elevators: evs, waiting: waitingSnapshot };
 }
 
-function startMove(el, dir, ticksPerFloor) {
+// 2-D replay frame: each car carries continuous (posF, posC) so the renderer can slide
+// it smoothly along either axis; waiting riders and drop-offs carry their {floor,col}.
+function recordFrameGrid(time, elevators, waiting, capacity, ticksPerFloor, delivered, total, distance) {
+  let riding = 0;
+  const evs = elevators.map((el) => {
+    const progress = el.travelRemaining > 0 ? (ticksPerFloor - el.travelRemaining) / ticksPerFloor : 0;
+    riding += el.onboard.length;
+    return {
+      index: el.index,
+      floor: el.floor,
+      col: el.col,
+      posF: el.floor + el.pendingDir * progress,
+      posC: el.col + el.pendingCol * progress,
+      dir: el.direction,
+      doorOpen: el.doors === 'open' ? 1 : 0,
+      load: el.onboard.length,
+      capacity,
+      carCalls: uniqueCells(el.onboard.map((p) => ({ floor: p.dest, col: p.destCol ?? 0 }))),
+    };
+  });
+  const waitingSnapshot = waiting.map((p) => ({
+    id: p.id,
+    floor: p.origin,
+    col: p.originCol ?? 0,
+    dest: p.dest,
+    destCol: p.destCol ?? 0,
+    wait: time - p.spawnTick,
+  }));
+  return { t: time, delivered, total, distance, riding, grid: true, elevators: evs, waiting: waitingSnapshot };
+}
+
+// Begin moving one cell: (df, dc) is the floor/column delta — exactly one is non-zero
+// (a car never moves diagonally). `direction` keeps its up/down meaning for the 1-D
+// path and gains left/right for the 2-D bonus levels.
+function startMove(el, df, dc, ticksPerFloor) {
   el.moving = true;
-  el.pendingDir = dir;
+  el.pendingDir = df;
+  el.pendingCol = dc;
   el.travelRemaining = ticksPerFloor;
-  el.direction = dir > 0 ? 'up' : 'down';
+  el.direction = df > 0 ? 'up' : df < 0 ? 'down' : dc > 0 ? 'right' : 'left';
+}
+
+// 2-D boarding: a stopped car delivers everyone whose destination cell is this cell,
+// then boards whoever is waiting in this cell up to capacity — no direction constraint
+// (there's no up/down to commit to on a grid). Returns the number delivered here.
+function serviceStopGrid(el, waiting, capacity, time) {
+  let deliveredHere = 0;
+  for (let k = el.onboard.length - 1; k >= 0; k--) {
+    const p = el.onboard[k];
+    if (p.dest === el.floor && (p.destCol ?? 0) === el.col) {
+      p.dropTick = time;
+      el.onboard.splice(k, 1);
+      deliveredHere++;
+    }
+  }
+  for (let k = 0; k < waiting.length && el.onboard.length < capacity; ) {
+    const p = waiting[k];
+    if (p.origin === el.floor && (p.originCol ?? 0) === el.col) {
+      if (p.pickupTick == null) p.pickupTick = time;
+      el.onboard.push(p);
+      waiting.splice(k, 1);
+    } else {
+      k++;
+    }
+  }
+  return deliveredHere;
 }
 
 // Service a stop in three strict phases so a sky-lobby transfer is unambiguous and
@@ -314,7 +402,23 @@ function clamp(v, lo, hi) {
   return v < lo ? lo : v > hi ? hi : v;
 }
 
-function snapshotElevator(el, capacity) {
+function snapshotElevator(el, capacity, grid) {
+  if (grid) {
+    // 2-D: position is a {floor, col} cell; carCalls are the destination CELLS aboard.
+    return {
+      index: el.index,
+      floor: el.floor,
+      col: el.col,
+      minCol: el.minCol,
+      maxCol: el.maxCol,
+      doors: el.doors,
+      moving: el.moving,
+      ready: !el.moving && el.doorRemaining === 0,
+      load: el.onboard.length,
+      capacity,
+      carCalls: uniqueCells(el.onboard.map((p) => ({ floor: p.dest, col: p.destCol ?? 0 }))),
+    };
+  }
   // carCalls are this-leg drop-offs (legTarget), always inside the car's range — so a
   // controller never sees a stop it can't actually drive to.
   const carCalls = [...new Set(el.onboard.map((p) => p.legTarget))].sort((a, b) => a - b);
@@ -331,6 +435,34 @@ function snapshotElevator(el, capacity) {
     capacity,
     carCalls,
   };
+}
+
+// Distinct {floor,col} cells, sorted (floor then col) so the controller's view and the
+// recorded frames are deterministic.
+function uniqueCells(cells) {
+  const seen = new Set();
+  const out = [];
+  for (const c of cells) {
+    const k = `${c.floor}:${c.col}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push({ floor: c.floor, col: c.col });
+  }
+  return out.sort((a, b) => a.floor - b.floor || a.col - b.col);
+}
+
+// 2-D hall calls: one entry per occupied {floor,col} cell, in arrival order.
+function buildHallCallsGrid(waiting) {
+  const seen = new Set();
+  const calls = [];
+  for (const p of waiting) {
+    const col = p.originCol ?? 0;
+    const key = `${p.origin}:${col}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    calls.push({ floor: p.origin, col });
+  }
+  return calls;
 }
 
 // One hall call per (current-floor, direction), kept in arrival order (oldest first).

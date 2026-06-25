@@ -73,3 +73,66 @@ function serves(e, call) {
   return call.direction === 'up' ? call.floor < e.maxFloor : call.floor > e.minFloor;
 }
 `;
+
+// Starter for the 2-D "sideways" bonus levels. Mirrors the naive grid baseline (one
+// errand at a time) so it clears at ~1 star but is very beatable — the fun is making
+// the car waste fewer trips by grabbing riders on the way.
+export const GRID_STARTER_CODE = `// A 2-D building! Each car now has a column too, and two new moves:
+//   MOVE_LEFT and MOVE_RIGHT   (alongside MOVE_UP / MOVE_DOWN, STOP, IDLE)
+//
+// state.elevators[i] = { floor, col, ready, load, capacity, carCalls: [ {floor,col}, ... ] }
+// state.hallCalls    = [ { floor, col }, ... ]   // cells where people are waiting
+//
+// On STOP a car picks up everyone standing in its cell (no up/down direction here).
+// This starter runs ONE errand at a time: if it's carrying riders it drives to the
+// nearest drop-off; otherwise it heads to the nearest waiting cell (and two cars never
+// claim the same one). It moves up/down first, then left/right. It works — but it makes
+// a separate trip for almost everyone. Can you grab riders on the way and waste fewer?
+function createController(config) {
+  return {
+    step(state) {
+      const cars = state.elevators;
+
+      // A carrying car is committed to its nearest drop-off cell.
+      const target = cars.map((e) => (e.load > 0 ? nearest(e, e.carCalls) : null));
+
+      // Give each still-empty car the nearest waiting cell no other car has taken.
+      for (const call of state.hallCalls) {
+        let pick = -1;
+        let best = Infinity;
+        cars.forEach((e, i) => {
+          if (target[i]) return;
+          const d = dist(e, call);
+          if (d < best) { best = d; pick = i; }
+        });
+        if (pick !== -1) target[pick] = call;
+      }
+
+      return cars.map((e, i) => {
+        if (!e.ready) return { action: 'IDLE' };
+        const t = target[i];
+        if (!t) return { action: 'IDLE' };
+        if (e.floor < t.floor) return { action: 'MOVE_UP' };
+        if (e.floor > t.floor) return { action: 'MOVE_DOWN' };
+        if (e.col < t.col) return { action: 'MOVE_RIGHT' };
+        if (e.col > t.col) return { action: 'MOVE_LEFT' };
+        return { action: 'STOP' };
+      });
+    },
+  };
+}
+
+function dist(e, c) {
+  return Math.abs(c.floor - e.floor) + Math.abs(c.col - e.col);
+}
+
+function nearest(e, cells) {
+  let best = null;
+  let bd = Infinity;
+  for (const c of cells) {
+    const d = dist(e, c);
+    if (d < bd) { bd = d; best = c; }
+  }
+  return best;
+}
+`;
