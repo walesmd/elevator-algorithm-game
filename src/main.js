@@ -13,7 +13,8 @@ import { scoreFromPlayerRuns, scoreLevel } from './game/scoring.js';
 import { runSimulation } from './engine/simulation.js';
 import { saveResult, getBest, saveCode, loadCode, saveLastLevel, loadLastLevel } from './game/progress.js';
 import { isUnlocked } from './game/progression.js';
-import { renderBrief, renderResults, renderComparison } from './game/ui.js';
+import { renderBrief, renderResults, renderComparison, renderHints } from './game/ui.js';
+import { analyze } from './game/analyzer.js';
 import { createRenderer } from './render/renderer.js';
 import { createPlayer } from './render/playback.js';
 import { createEditor } from './render/editor.js';
@@ -27,6 +28,10 @@ let editor = null;
 let harness = null;
 let running = false;
 let galleryReady = false;
+// Tiered-hints state for the current level (reset on level switch). `revealed` is how
+// many of the three rungs the player has opened; `runHint` is the analyzer's
+// run-specific Hint 2, refreshed after each run.
+let hintState = { revealed: 0, runHint: null };
 const viz = { renderer: null, player: null, speed: 1 };
 
 async function run() {
@@ -40,6 +45,16 @@ async function run() {
     const res = await harness.score({ code, level, seeds: level.seeds, recordSeed: level.seeds[0] });
     if (currentLevel !== level) return; // switched levels mid-run — drop the stale result
     const result = scoreFromPlayerRuns(level, res.perSeed.map((p) => p.metrics), res.warnings);
+
+    // Diagnose the run (using the seed we visualize, so feedback matches what's shown).
+    // prevBest is read BEFORE saveResult so "a new best!" is accurate.
+    const prevBest = getBest(level.id);
+    result.analysis = analyze({
+      frames: res.frames || [], metrics: result.metrics, par: result.par,
+      level, prevBest, stars: result.stars,
+    });
+    hintState.runHint = result.analysis.runHint;
+    renderHints(els.hints, level, hintState); // refresh Hint 2 with this run's symptom
 
     // Which levels were locked before we record this result?
     const lockedBefore = levels.filter((l) => !isUnlocked(levels, l.id, starsOf));
@@ -294,6 +309,8 @@ function selectLevel(level) {
   currentLevel = level;
   saveLastLevel(level.id);
   renderBrief(els.brief, level);
+  hintState = { revealed: 0, runHint: null }; // hints are per-level; start fresh
+  renderHints(els.hints, level, hintState);
   editor.setValue(loadCode(level.id) || STARTER_CODE);
   els.results.innerHTML = '<p class="hint">Press Run to score your algorithm and watch it drive the building.</p>';
   els.comparison.innerHTML = ''; // stale: it was for the previous level
@@ -313,6 +330,14 @@ function showToast(msg) {
 
 function bindControls() {
   els.runBtn.addEventListener('click', run);
+
+  // Tiered hints: each click reveals the next rung (capped at 3), then re-renders.
+  els.hints.addEventListener('click', (e) => {
+    if (!e.target.closest('.hint-reveal')) return;
+    hintState.revealed = Math.min(3, hintState.revealed + 1);
+    renderHints(els.hints, currentLevel, hintState);
+  });
+
   els.resetBtn.addEventListener('click', () => {
     if (!safeToReplaceEditor()) return;
     editor.setValue(STARTER_CODE);
@@ -394,6 +419,7 @@ function bindControls() {
 function init() {
   els = {
     brief: document.getElementById('brief'),
+    hints: document.getElementById('hints'),
     editorMount: document.getElementById('editor'),
     results: document.getElementById('results'),
     runBtn: document.getElementById('run'),
