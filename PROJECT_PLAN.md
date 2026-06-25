@@ -492,20 +492,26 @@ that first run smoother still.
 Phase 7 makes it *teach*. This is the priority phase — everything in it is judged
 against the one question from the doctrine (CLAUDE.md): does it help someone
 *understand*? It is deliberately sequenced ahead of the engagement/sharing features
-(now **Phase 8**). The work:
+(now **Phase 8**). Ships in staged PRs, like Phase 6:
 
-- **A/B compare two algorithms side by side** — the anchor feature, detailed below.
-- **Tiered hints (1 → 2 → 3), never the answer.** Hint 1 restates the goal/concept;
-  Hint 2 points at the specific symptom in *their* run; Hint 3 names the technique.
-  Pulled forward from Phase 6's polish list because hints are core pedagogy.
-- **Expanded diagnostic + Socratic feedback.** Grow the local anti-pattern analyzer
-  (more named patterns, per level) and compare each run to par *and* to the player's
-  own previous best, so feedback stays specific, kind, and concept-linked.
-- **A concept / docs panel.** Name the CS idea behind each level (scheduling, SCAN /
-  LOOK, multi-car dispatch, zoning + transfers) and link out — "name the concept,
-  not the code."
-- **Earned, opt-in worked references.** Keep the reference gallery spoiler-gated;
-  surface a worked explanation only after a level is cleared or explicitly revealed.
+- **7A — the guidance surface (done):** a local, frame-based run analyzer
+  (`src/game/analyzer.js`) that detects named anti-patterns from the recorded run
+  (stranded, starvation, passed-a-same-direction-call, over-travel, high wait, idled
+  with work pending) and maps each to a non-spoiler, concept-linked message;
+  **tiered hints** (`src/game/hints.js`, `ui.renderHints`) — Hint 1 the idea, Hint 2
+  the analyzer's symptom-in-*your*-run, Hint 3 the technique — revealed one rung at a
+  time, opt-in, never the answer; and **analyzer-driven post-run feedback** that names
+  the single highest-impact thing and compares to par *and* the player's own previous
+  best. Rules are data/heuristics, decoupled and tested (`test/analyzer.test.js`).
+- **7B — A/B compare two algorithms side by side** — the anchor feature, detailed below.
+- **7C — concept/docs panel + onboarding + worked references:**
+  - *A concept / docs panel* — name the CS idea behind each level (scheduling, SCAN /
+    LOOK, multi-car dispatch, zoning + transfers) and link out — "name the concept,
+    not the code."
+  - *First-run onboarding tutorial* (deferred from Phase 6), built on the 7A hint
+    surface so it reuses one guidance voice.
+  - *Earned, opt-in worked references* — keep the reference gallery spoiler-gated;
+    surface a worked explanation only after a level is cleared or explicitly revealed.
 
 *A/B compare two algorithms side by side.* Replay two algorithms (the player's vs a
 reference, or two references) on the **same level and the same seed**, with their

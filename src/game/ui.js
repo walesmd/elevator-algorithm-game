@@ -5,6 +5,8 @@
 // visualization (Canvas) and the in-page code editor land in later phases; this
 // keeps the loop — read brief, run, see how you did — working today.
 
+import { getHints } from './hints.js';
+
 export function renderBrief(el, level) {
   const b = level.brief;
   el.innerHTML = `
@@ -43,7 +45,7 @@ export function renderResults(el, result, best) {
           m.deliveredAll ? ' ✓' : ''
         }</td></tr>
       </table>
-      <p class="feedback">${escape(feedbackFor(result))}</p>
+      <p class="feedback">${escape(result.analysis ? result.analysis.feedback : feedbackFor(result))}</p>
       ${best ? `<p class="best">Best so far: ${stars(best.stars)}</p>` : ''}
       ${
         result.warnings && result.warnings.length
@@ -69,6 +71,39 @@ export function feedbackFor(result) {
     return `Everyone arrives — nice. But your average wait is well above par. Watch for riders you pass who want to go the same direction you're already heading. There's a classic strategy for this.`;
   }
   return `Solid run — everyone delivered and you're near par. Look for the single metric furthest from par and focus there.`;
+}
+
+// Tiered hints (Phase 7), opt-in and progressive. Three rungs — the idea (Hint 1),
+// the symptom in your own run (Hint 2, from the analyzer), then the technique to look
+// up (Hint 3) — revealed one at a time so a stuck learner gets just enough to get
+// unstuck, never the answer. Nothing is shown until the player asks. `state` is
+// { revealed:0..3, runHint:string|null }; main.js owns it and re-renders on reveal.
+export function renderHints(el, level, state) {
+  const h = getHints(level.id);
+  const revealed = Math.max(0, Math.min(3, state.revealed || 0));
+  const tiers = [
+    { label: 'Hint 1 · the idea', text: h.concept },
+    {
+      label: 'Hint 2 · your run',
+      text: state.runHint || 'Run your algorithm once — then this hint points at the single biggest thing to fix in the run you just watched.',
+    },
+    { label: 'Hint 3 · the technique', text: h.technique },
+  ];
+  const shown = tiers
+    .slice(0, revealed)
+    .map((t) => `<div class="hint-tier"><b>${escape(t.label)}</b><p>${escape(t.text)}</p></div>`)
+    .join('');
+  const more =
+    revealed < 3
+      ? `<button class="ghost hint-reveal" type="button">${revealed === 0 ? 'Reveal the first hint' : 'Show the next hint'} →</button>`
+      : `<p class="hint hints-done">That’s all three — the rest is yours to discover. That struggle is where the learning is.</p>`;
+  el.innerHTML = `
+    <div class="hints">
+      <div class="hints-head">Stuck? Tiered hints <span class="hints-count">${revealed}/3</span></div>
+      ${revealed === 0 ? '<p class="hints-intro">Three rungs, revealed one at a time — the idea, what went wrong in your run, then the technique to look up. None of them is the answer.</p>' : ''}
+      ${shown}
+      ${more}
+    </div>`;
 }
 
 // Side-by-side comparison of the reference algorithms on one level. Each row is
