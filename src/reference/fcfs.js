@@ -18,6 +18,12 @@ export const meta = {
     'The simplest fair rule: each car handles one request at a time, in the order it arrived, ' +
     'and a second car just takes the calls the first one isn\'t going for. Easy to reason about, ' +
     'but every car backtracks across the building a lot.',
+  howItWorks:
+    'FCFS keeps it simple: it serves whole requests one at a time, in the order they arrived. ' +
+    'Each free car picks one errand — a drop-off it is already carrying, or the oldest waiting call — ' +
+    'and drives straight there, ignoring everyone it passes on the way. With more than one car, the ' +
+    'only coordination is that two cars never claim the same call. Because it never picks up the riders ' +
+    'it drives past, those riders wait for an entirely separate trip, so the cars backtrack constantly.',
   spoiler: false, // the sanctioned strawman, not a solution
 };
 
