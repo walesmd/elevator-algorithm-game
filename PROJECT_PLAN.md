@@ -562,19 +562,37 @@ optional bring-your-own-key generative provider for plain-English run/compare pr
 additive only, never bundled, never required. Because it deepens *explanation*, it
 belongs with the Phase 7 pedagogy work, not the Phase 8 sharing features.)
 
-**Phase 8 — Sharing & challenge (stretch).** The engagement and replayability layer,
-deliberately sequenced after the Phase 7 educational work:
+**Phase 8 — Bonus: elevators that go sideways.** Pure fun, not curriculum. A friend
+asked, "what if elevators could travel horizontally?" — so these bonus levels add a
+second axis: a car can move not just up/down between floors but left/right along a
+floor. Two themed levels, inspired by Roald Dahl's Great Glass Elevator and the
+Gringotts mine-carts:
 
-- **Ghost / replay URL sharing.** Encode a run (level + seed + the player's code, or
-  just a recorded trace) into a shareable link, so a learner can hand someone their
-  solution to watch, or race a "ghost" of a previous attempt. Stays client-side and
-  offline-friendly — the link carries the data, no server.
-- **Daily-seed challenge.** One shared seed per day on a chosen level, with a
-  personal-best board, for a low-stakes recurring reason to come back and refine an
-  algorithm against everyone else's same traffic.
+- **Always open.** Unlike the eleven curriculum levels (which unlock one at a time),
+  the bonus levels are playable from the start — no clearing required. They sit apart
+  from the unlock ladder; they're a sandbox to mess around in.
+- **The new capability — a 2-D building.** A level can declare a grid (floors ×
+  columns). A car has a `{floor, col}` position and gains two commands, `MOVE_LEFT` /
+  `MOVE_RIGHT`, alongside the existing `MOVE_UP` / `MOVE_DOWN`. This is **additive**:
+  any level without a grid is one column wide and behaves byte-for-byte as before
+  (the same discipline that kept zoning and transfers from disturbing the older
+  levels). Boarding on a grid is simplified for fun — a stopped car picks up whoever
+  is waiting in its cell — rather than the directional-collective rule, which has no
+  natural meaning in two dimensions.
+- **The two levels.**
+  - *The Great Glass Elevator* — one free-roaming car on an open grid, whimsical
+    sparse traffic, "go anywhere" movement.
+  - *Gringotts* — a deeper, busier grid with several carts shuttling between a lobby
+    column and clustered vaults.
+- **Honest stars, still.** Each bonus level ships with grid-aware reference
+  controllers (a naive baseline + a solid Manhattan-distance dispatcher) so the
+  1★/3★ thresholds stay reference-anchored, exactly like the curriculum.
+- **Renderer.** A 2-D grid view (rooms in a grid, a car that slides both ways) for
+  grid levels; the vertical-shaft renderer is untouched for the curriculum.
 
-These are about reach and replayability, not teaching, which is why they follow
-Phase 7 rather than lead it.
+*DoD:* from the start, a player can open either bonus level and write a controller
+that drives a car up/down AND left/right to deliver everyone; stars are
+reference-anchored; none of the eleven curriculum levels change.
 
 ---
 

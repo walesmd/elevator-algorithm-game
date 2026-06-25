@@ -62,6 +62,16 @@ const CONCEPTS = {
     what: 'Two cars per zone plus sky-lobby transfers: dispatch within each zone, keep every car in its range, and hand cross-zone riders off at the shared floor.',
     url: 'https://en.wikipedia.org/wiki/Sky_lobby',
   },
+  b1: {
+    name: 'Routing on a 2-D grid',
+    what: 'Add a second axis and "where do I send the car?" becomes routing on a grid — the same scheduling idea, now with Manhattan distance (floors + columns) standing in for plain floor distance.',
+    url: 'https://en.wikipedia.org/wiki/Taxicab_geometry',
+  },
+  b2: {
+    name: 'Dispatching a fleet on a grid',
+    what: 'Several cars roaming a 2-D grid: assign fares so the cars cover different regions and pick riders up en route — the vehicle-dispatch problem behind ride-hailing and warehouse robots.',
+    url: 'https://en.wikipedia.org/wiki/Vehicle_routing_problem',
+  },
 };
 
 const FALLBACK = {

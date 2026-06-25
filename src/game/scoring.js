@@ -14,6 +14,16 @@
 import { runSimulation } from '../engine/simulation.js';
 import * as fcfs from '../reference/fcfs.js';
 import * as look from '../reference/look.js';
+import { gridNaive, gridSmart } from '../reference/grid.js';
+
+// The references that anchor the stars depend on the level's dimensionality: the
+// curriculum's up/down algorithms can't serve a 2-D grid, so the "sideways" bonus
+// levels anchor on grid-aware controllers instead. Same shape either way: a naive
+// baseline (≈ 1★) and a strong reference (≈ 3★, "par").
+function parControllers(level) {
+  if ((level.numCols ?? 1) > 1) return { base: gridNaive, par: gridSmart, label: 'best ref' };
+  return { base: fcfs.createController, par: look.createController, label: 'LOOK' };
+}
 
 const DEFAULT_WEIGHTS = { wait: 1, journey: 0.5, distance: 0.1, undelivered: 1000 };
 
@@ -48,14 +58,16 @@ export function scoreFromPlayerRuns(level, perSeedMetrics, warnings = []) {
   const metrics = aggregate(perSeedMetrics.map((m) => ({ metrics: m })));
   const composite = compositeOf(metrics, level.weights);
 
-  const { fcfsAgg, lookAgg, fcfsComposite, lookComposite } = getReferences(level);
+  const { fcfsAgg, lookAgg, fcfsComposite, lookComposite, label } = getReferences(level);
   const stars = computeStars(metrics, composite, fcfsComposite, lookComposite);
 
   return {
     metrics,
     composite,
     stars,
-    par: { fcfs: fcfsAgg, look: lookAgg, fcfsComposite, lookComposite },
+    // Keys stay fcfs/look so the results UI is dimension-agnostic; `label` names the par
+    // reference for display ("LOOK" on the curriculum, "best ref" on grid levels).
+    par: { fcfs: fcfsAgg, look: lookAgg, fcfsComposite, lookComposite, label },
     warnings,
   };
 }
@@ -97,15 +109,17 @@ export function computeStars(metrics, composite, fcfsComposite, lookComposite) {
 
 export function getReferences(level) {
   if (referenceCache.has(level.id)) return referenceCache.get(level.id);
-  const fcfsRuns = level.seeds.map((s) => runSimulation(level, s, fcfs.createController));
-  const lookRuns = level.seeds.map((s) => runSimulation(level, s, look.createController));
-  const fcfsAgg = aggregate(fcfsRuns);
-  const lookAgg = aggregate(lookRuns);
+  const { base, par, label } = parControllers(level);
+  const baseRuns = level.seeds.map((s) => runSimulation(level, s, base));
+  const parRuns = level.seeds.map((s) => runSimulation(level, s, par));
+  const fcfsAgg = aggregate(baseRuns);
+  const lookAgg = aggregate(parRuns);
   const result = {
     fcfsAgg,
     lookAgg,
     fcfsComposite: compositeOf(fcfsAgg, level.weights),
     lookComposite: compositeOf(lookAgg, level.weights),
+    label,
   };
   referenceCache.set(level.id, result);
   return result;

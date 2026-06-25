@@ -40,13 +40,14 @@ export function renderResults(el, result, best) {
 
   const m = result.metrics;
   const look = result.par.look;
+  const parLabel = result.par.label || 'LOOK';
   el.innerHTML = `
     <div class="results">
       <div class="stars" title="${m.deliveredAll ? '' : 'Deliver everyone to earn stars'}">${stars(
         result.stars
       )}</div>
       <table class="metrics">
-        <tr><th></th><th>You</th><th>Par (LOOK)</th></tr>
+        <tr><th></th><th>You</th><th>Par (${escape(parLabel)})</th></tr>
         ${row('Avg wait', m.avgWait, look.avgWait)}
         ${row('Avg journey', m.avgJourney, look.avgJourney)}
         ${row('Max wait', m.maxWait, look.maxWait)}
