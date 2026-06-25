@@ -89,18 +89,28 @@ export function renderHints(el, level, state) {
     },
     { label: 'Hint 3 · the technique', text: h.technique },
   ];
+  // Resting state: a single quiet affordance, nothing to read until you ask. (The
+  // generic "how hints work" preamble was just noise on every level — the per-tier
+  // labels below already make the three-rung structure clear once you engage.)
+  if (revealed === 0) {
+    el.innerHTML = `
+      <div class="hints">
+        <button class="ghost hint-reveal" type="button">Stuck? Reveal a hint →</button>
+      </div>`;
+    return;
+  }
+
   const shown = tiers
     .slice(0, revealed)
     .map((t) => `<div class="hint-tier"><b>${escape(t.label)}</b><p>${escape(t.text)}</p></div>`)
     .join('');
   const more =
     revealed < 3
-      ? `<button class="ghost hint-reveal" type="button">${revealed === 0 ? 'Reveal the first hint' : 'Show the next hint'} →</button>`
+      ? `<button class="ghost hint-reveal" type="button">Show the next hint →</button>`
       : `<p class="hint hints-done">That’s all three — the rest is yours to discover. That struggle is where the learning is.</p>`;
   el.innerHTML = `
     <div class="hints">
-      <div class="hints-head">Stuck? Tiered hints <span class="hints-count">${revealed}/3</span></div>
-      ${revealed === 0 ? '<p class="hints-intro">Three rungs, revealed one at a time — the idea, what went wrong in your run, then the technique to look up. None of them is the answer.</p>' : ''}
+      <div class="hints-head">Tiered hints <span class="hints-count">${revealed}/3</span></div>
       ${shown}
       ${more}
     </div>`;
