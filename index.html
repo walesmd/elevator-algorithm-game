@@ -204,13 +204,60 @@
         .stage-wrap { height:300px; }
         .stars { font-size:26px; }
       }
+
+      /* --- Phase 7C: concept note, worked references, onboarding --- */
+      header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+      header .header-text { min-width:0; }
+      .how-btn { flex:0 0 auto; align-self:center; }
+      details.concept { margin-top:10px; }
+      details.concept > summary { cursor:pointer; font-size:13px; color:var(--ink); list-style:none; user-select:none; }
+      details.concept > summary::-webkit-details-marker { display:none; }
+      details.concept > summary::before { content:'▸'; display:inline-block; margin-right:6px; color:var(--muted); transition:transform .15s; }
+      details.concept[open] > summary::before { transform:rotate(90deg); }
+      .concept-tag { font-size:10px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-right:6px; }
+      details.concept p { margin:6px 0 0; font-size:13px; color:var(--muted); }
+      .concept-link { color:var(--accent); text-decoration:none; }
+      .concept-link:hover { text-decoration:underline; }
+      .algo-how { margin-top:8px; padding:8px 11px; background:#10242e; border-left:3px solid var(--accent); border-radius:4px; font-size:12.5px; color:var(--ink); }
+      .algo-how[hidden] { display:none; }
+      /* Onboarding: a one-time welcome overlay, reopenable from the header. */
+      .onboarding { position:fixed; inset:0; background:rgba(6,10,14,.72); display:flex; align-items:center; justify-content:center; padding:20px; z-index:60; }
+      .onboarding[hidden] { display:none; }
+      .onboarding-card { background:var(--panel); border:1px solid var(--line); border-radius:12px; max-width:440px; width:100%; padding:22px 22px 18px; box-shadow:0 12px 40px rgba(0,0,0,.5); }
+      .onboarding-card h2 { margin:0 0 4px; font-size:18px; }
+      .onboarding-card .lead { color:var(--muted); font-size:13px; margin:0 0 14px; }
+      .onboarding-steps { list-style:none; margin:0 0 16px; padding:0; display:grid; gap:11px; }
+      .onboarding-steps li { display:flex; gap:11px; align-items:flex-start; }
+      .onboarding-steps .num { flex:0 0 auto; width:22px; height:22px; border-radius:50%; background:var(--accent); color:#04222f; font-weight:700; font-size:12px; display:flex; align-items:center; justify-content:center; }
+      .onboarding-steps .txt { font-size:13.5px; }
+      .onboarding-steps .txt b { color:var(--ink); }
+      .onboarding-actions { display:flex; justify-content:flex-end; }
     </style>
   </head>
   <body>
     <header>
-      <h1>Elevator Algorithm Game</h1>
-      <p>Write the brain that runs the elevator. Run it, read the feedback, make riders wait less.</p>
+      <div class="header-text">
+        <h1>Elevator Algorithm Game</h1>
+        <p>Write the brain that runs the elevator. Run it, read the feedback, make riders wait less.</p>
+      </div>
+      <button id="how-it-works" class="ghost how-btn" type="button">How it works</button>
     </header>
+
+    <div id="onboarding" class="onboarding" hidden role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
+      <div class="onboarding-card">
+        <h2 id="onboarding-title">You run the elevators 🛗</h2>
+        <p class="lead">You write a little JavaScript that decides where each elevator goes. Here’s the loop:</p>
+        <ol class="onboarding-steps">
+          <li><span class="num">1</span><span class="txt"><b>Read the brief</b> on the left — the goal, the constraint, and what earns stars.</span></li>
+          <li><span class="num">2</span><span class="txt"><b>Write <code>createController</code></b> in the editor (a starting point is already there) and press <b>Run</b>.</span></li>
+          <li><span class="num">3</span><span class="txt"><b>Watch your elevators</b> drive the building, then read the feedback — it names the one thing most worth improving.</span></li>
+          <li><span class="num">4</span><span class="txt"><b>Stuck?</b> Reveal a tiered hint, or open the spoiler gallery to watch and compare the classic strategies.</span></li>
+        </ol>
+        <div class="onboarding-actions">
+          <button id="onboarding-go" class="primary" type="button">Let’s go</button>
+        </div>
+      </div>
+    </div>
 
     <div id="level-bar"></div>
 

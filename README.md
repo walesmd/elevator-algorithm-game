@@ -65,13 +65,18 @@ What works today:
   / `hotel`.
 - A full play loop: read the brief, edit the algorithm, Run, watch it, read the
   metrics + feedback, and advance through unlocking levels.
+- A **pedagogy layer** (Phase 7): a local run **analyzer** that names anti-patterns
+  from the recorded run, **tiered hints** (the idea → the symptom in your run → the
+  technique, opt-in, never the answer), an **A/B compare** tool that replays two
+  algorithms side by side on the same seed and curates the few notable moments where
+  they diverge, a per-level **concept note** that names the CS idea and links out, a
+  first-run **onboarding** overlay, and **worked reference explanations** earned by
+  clearing a level.
 - Passing headless tests (`simulation`, `recording`, `phase3`, `references`,
-  `progression`).
+  `progression`, `analyzer`, `compare`, `content`).
 
-Not yet built: an onboarding tutorial and visual polish (Phase 6); the **Phase 7
-pedagogy layer** — tiered hints, richer Socratic feedback, a concept/docs panel, and
-an A/B "compare two algorithms" tool with notable-moment callouts; then **Phase 8
-sharing/challenge** stretch features (ghost/replay URL sharing, daily-seed challenge).
+Not yet built: **Phase 8** sharing/challenge stretch features — ghost/replay URL
+sharing and a daily-seed challenge.
 
 ## Run it
 

@@ -488,11 +488,11 @@ of being hand-rolled now and reworked later. Levels landed in staged PRs:
 starter comments + the spoiler gallery); the onboarding tutorial in Phase 7 will make
 that first run smoother still.
 
-**Phase 7 — Pedagogy & educational depth.** Phase 6 makes the game *complete*;
-Phase 7 makes it *teach*. This is the priority phase — everything in it is judged
-against the one question from the doctrine (CLAUDE.md): does it help someone
-*understand*? It is deliberately sequenced ahead of the engagement/sharing features
-(now **Phase 8**). Ships in staged PRs, like Phase 6:
+**Phase 7 — Pedagogy & educational depth. ✅ DONE.** Phase 6 makes the game
+*complete*; Phase 7 makes it *teach*. This was the priority phase — everything in it
+is judged against the one question from the doctrine (CLAUDE.md): does it help someone
+*understand*? It was deliberately sequenced ahead of the engagement/sharing features
+(now **Phase 8**). Shipped in staged PRs, like Phase 6:
 
 - **7A — the guidance surface (done):** a local, frame-based run analyzer
   (`src/game/analyzer.js`) that detects named anti-patterns from the recorded run
@@ -512,14 +512,17 @@ against the one question from the doctrine (CLAUDE.md): does it help someone
   vs. thrash, who finishes first, biggest spread — each a non-spoiler note with a tick
   the synced replay jumps to. Quiet when the two runs are near-identical. Tested in
   `test/compare.test.js`.
-- **7C — concept/docs panel + onboarding + worked references:**
-  - *A concept / docs panel* — name the CS idea behind each level (scheduling, SCAN /
-    LOOK, multi-car dispatch, zoning + transfers) and link out — "name the concept,
-    not the code."
-  - *First-run onboarding tutorial* (deferred from Phase 6), built on the 7A hint
-    surface so it reuses one guidance voice.
-  - *Earned, opt-in worked references* — keep the reference gallery spoiler-gated;
-    surface a worked explanation only after a level is cleared or explicitly revealed.
+- **7C — concept/docs panel + onboarding + worked references (done):**
+  - *A concept note* (`src/game/concepts.js`) — a collapsed "the concept" line on each
+    brief naming the CS idea (scheduling, SCAN / LOOK, dispatch, zoning + sky-lobby)
+    with a "read more" link out. Always available, distinct from the run-aware hints.
+  - *First-run onboarding* — a one-time welcome overlay (4-step loop walkthrough),
+    persisted via a `localStorage` flag and reopenable from a header "How it works"
+    button; dismissed by button / Escape / backdrop.
+  - *Earned, opt-in worked references* — each gallery algorithm has a `howItWorks`
+    walkthrough; the naive baseline (FCFS) is free, the solving algorithms' are shown
+    only once the level is cleared (≥ 1★) or via an explicit "reveal anyway" confirm.
+  - Content is data and guarded by `test/content.test.js` (completeness + non-spoiler).
 
 *A/B compare two algorithms side by side.* Replay two algorithms (the player's vs a
 reference, or two references) on the **same level and the same seed**, with their

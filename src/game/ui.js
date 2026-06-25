@@ -6,9 +6,14 @@
 // keeps the loop — read brief, run, see how you did — working today.
 
 import { getHints } from './hints.js';
+import { getConcept } from './concepts.js';
 
 export function renderBrief(el, level) {
   const b = level.brief;
+  const c = getConcept(level.id);
+  // The "concept" note names the CS idea behind the level and links out to read more
+  // ("name the concept, not the code"). Collapsed by default — reference material, not
+  // a spoiler, and distinct from the run-aware tiered hints below.
   el.innerHTML = `
     <h2>${escape(level.name)}</h2>
     <p class="situation">${escape(b.situation)}</p>
@@ -17,7 +22,12 @@ export function renderBrief(el, level) {
       <dt>Constraint</dt><dd>${escape(b.constraint)}</dd>
       <dt>Measured</dt><dd>${escape(b.measured)}</dd>
       <dt>To clear</dt><dd>${escape(b.bar)}</dd>
-    </dl>`;
+    </dl>
+    <details class="concept">
+      <summary><span class="concept-tag">The concept</span> ${escape(c.name)}</summary>
+      <p>${escape(c.what)}</p>
+      ${c.url ? `<p><a class="concept-link" href="${escape(c.url)}" target="_blank" rel="noopener noreferrer">Read more ↗</a></p>` : ''}
+    </details>`;
 }
 
 export function renderResults(el, result, best) {

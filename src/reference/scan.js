@@ -17,6 +17,12 @@ export const meta = {
   blurb:
     'Pick a direction, serve everyone heading that way as you pass, and only turn around once you hit the ' +
     'very top or bottom of the building — even if nobody is out there.',
+  howItWorks:
+    'SCAN sweeps the building end to end like a disk head: pick a direction, serve every same-direction ' +
+    'call you pass, and reverse only at the physical top or bottom — even when nothing is out there. ' +
+    'Serving riders en route is what makes it beat first-come-first-served; always running to the ' +
+    'extremes is the wasted travel that makes it lose to LOOK. With several cars, each runs its own ' +
+    'full sweep and a waiting call goes to the nearest car with room.',
   spoiler: true,
 };
 

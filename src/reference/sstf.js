@@ -16,6 +16,12 @@ export const meta = {
   blurb:
     'A greedy dispatcher that always heads to the nearest pending stop, drop-off or pickup. ' +
     'Quick wins up close, but watch what it does when calls are spread out.',
+  howItWorks:
+    'Shortest-Seek-Time-First is greedy: at every step each car heads to whichever pending stop is ' +
+    'nearest right now, and a waiting call is handed to the nearest car with room. It racks up quick ' +
+    'wins, but "nearest" has no sense of direction or fairness — as new calls land the closest target ' +
+    'keeps changing, so a car flip-flops (thrashing), and a lone far-off call can be passed over again ' +
+    'and again while nearer ones keep appearing (starvation).',
   spoiler: true,
 };
 

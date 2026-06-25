@@ -18,6 +18,13 @@ export const meta = {
   blurb:
     'The real elevator algorithm: pick a direction, pick up and drop off everyone heading that way as you pass, ' +
     'and turn around only when there is nothing further ahead.',
+  howItWorks:
+    'LOOK is how real elevators run — directional collective control. A car commits to a direction, shows ' +
+    'it, and serves every call going that way as it passes; riders heading the other way wait for the ' +
+    'return trip. Its one refinement over SCAN: it reverses the instant nothing is left ahead, instead of ' +
+    'driving to an empty end — which is what saves the distance. With several cars, each waiting call is ' +
+    'first handed to the best-placed car (one already heading that way), then each car runs LOOK over the ' +
+    'calls assigned to it plus its own drop-offs.',
   spoiler: true,
 };
 

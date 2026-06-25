@@ -59,6 +59,20 @@ export function loadCode(levelId) {
   return (data.code && data.code[levelId]) || null;
 }
 
+// One-shot UI flags (e.g. "has seen the welcome / onboarding"), persisted so a
+// returning player isn't shown the intro again.
+export function getFlag(name) {
+  const flags = read().flags || {};
+  return !!flags[name];
+}
+
+export function setFlag(name, value = true) {
+  const data = read();
+  data.flags = data.flags || {};
+  data.flags[name] = value;
+  write(data);
+}
+
 // Remember which level the player was last on, so a reload resumes there.
 export function saveLastLevel(levelId) {
   const data = read();

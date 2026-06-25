@@ -11,7 +11,7 @@
 import { levels } from './game/levels.js';
 import { scoreFromPlayerRuns, scoreLevel } from './game/scoring.js';
 import { runSimulation } from './engine/simulation.js';
-import { saveResult, getBest, saveCode, loadCode, saveLastLevel, loadLastLevel } from './game/progress.js';
+import { saveResult, getBest, saveCode, loadCode, saveLastLevel, loadLastLevel, getFlag, setFlag } from './game/progress.js';
 import { isUnlocked } from './game/progression.js';
 import { renderBrief, renderResults, renderComparison, renderHints } from './game/ui.js';
 import { analyze } from './game/analyzer.js';
@@ -201,7 +201,9 @@ function populateGallery() {
         <div class="algo-btns">
           <button data-act="insert">Insert into editor</button>
           <button data-act="watch">Watch on this level</button>
+          ${g.howItWorks ? '<button data-act="how">How it works</button>' : ''}
         </div>
+        <div class="algo-how" hidden></div>
       </div>`
     )
     .join('');
@@ -225,6 +227,27 @@ function insertReference(id) {
   editor.setValue(ref.source);
   saveCode(currentLevel.id, ref.source); // keep the editor and saved code in sync
   editor.focus();
+}
+
+// Reveal a reference's worked explanation — EARNED: a solving algorithm's walkthrough
+// is shown freely once you've cleared this level (>= 1 star), otherwise only after an
+// explicit "reveal anyway" (so it stays opt-in, per the spoiler doctrine). The naive
+// baseline (FCFS) isn't a spoiler, so it's always free.
+function revealHowItWorks(card, id) {
+  const ref = getReference(id);
+  if (!ref || !ref.howItWorks) return;
+  const out = card.querySelector('.algo-how');
+  if (!out || !out.hidden) return; // already shown
+  const earned = !ref.spoiler || starsOf(currentLevel.id) >= 1;
+  if (!earned) {
+    const ok = typeof confirm !== 'function' ||
+      confirm('This walks through how the algorithm works. You’ll learn more by clearing the level on your own first — reveal it anyway?');
+    if (!ok) return;
+  }
+  out.textContent = ref.howItWorks;
+  out.hidden = false;
+  const btn = card.querySelector('button[data-act="how"]');
+  if (btn) btn.disabled = true;
 }
 
 // Bring an element into view, honoring prefers-reduced-motion.
@@ -444,6 +467,18 @@ function selectLevel(level) {
   resetStage();
 }
 
+// --- Onboarding: a one-time welcome, reopenable from the header (Phase 7C) -----
+
+function showOnboarding() {
+  els.onboarding.hidden = false;
+  els.onboardingGo.focus();
+}
+
+function dismissOnboarding() {
+  els.onboarding.hidden = true;
+  setFlag('onboarded', true); // don't auto-show again
+}
+
 let toastTimer = null;
 function showToast(msg) {
   els.toast.textContent = msg;
@@ -454,6 +489,14 @@ function showToast(msg) {
 
 function bindControls() {
   els.runBtn.addEventListener('click', run);
+
+  // Onboarding: header button re-opens it; "Let's go" / Escape / backdrop dismiss it.
+  els.howItWorks.addEventListener('click', showOnboarding);
+  els.onboardingGo.addEventListener('click', dismissOnboarding);
+  els.onboarding.addEventListener('click', (e) => { if (e.target === els.onboarding) dismissOnboarding(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !els.onboarding.hidden) dismissOnboarding();
+  });
 
   // Tiered hints: each click reveals the next rung (capped at 3), then re-renders.
   els.hints.addEventListener('click', (e) => {
@@ -504,6 +547,7 @@ function bindControls() {
     if (!id) return;
     if (btn.dataset.act === 'insert') insertReference(id);
     else if (btn.dataset.act === 'watch') watchReference(id);
+    else if (btn.dataset.act === 'how') revealHowItWorks(btn.closest('.algo'), id);
   });
   els.compareBtn.addEventListener('click', compareAll);
   els.comparison.addEventListener('click', (e) => {
@@ -626,6 +670,10 @@ function init() {
     cmpSpeeds: document.getElementById('cmp-speeds'),
     cmpMoments: document.getElementById('cmp-moments'),
     toast: document.getElementById('toast'),
+    // Onboarding (Phase 7C)
+    onboarding: document.getElementById('onboarding'),
+    onboardingGo: document.getElementById('onboarding-go'),
+    howItWorks: document.getElementById('how-it-works'),
   };
 
   harness = createHarness({ budgetMs: 4000 });
@@ -640,6 +688,8 @@ function init() {
   // The level bar is built by selectLevel -> renderLevelBar. Resume where the
   // player left off (if that level is still unlocked), else start at level 1.
   selectLevel(resumeLevel());
+  // First-time visitors get the welcome overlay once; returning players don't.
+  if (!getFlag('onboarded')) showOnboarding();
 }
 
 if (typeof document !== 'undefined') {
