@@ -503,7 +503,15 @@ against the one question from the doctrine (CLAUDE.md): does it help someone
   time, opt-in, never the answer; and **analyzer-driven post-run feedback** that names
   the single highest-impact thing and compares to par *and* the player's own previous
   best. Rules are data/heuristics, decoupled and tested (`test/analyzer.test.js`).
-- **7B — A/B compare two algorithms side by side** — the anchor feature, detailed below.
+- **7B — A/B compare two algorithms side by side (done)** — the anchor feature
+  (detailed below). Pick two of {your code, the four references}; both run on the same
+  level + seed (seed 1, recorded) and replay in two buildings driven by one synced
+  clock (`src/render/syncplayer.js`). A local curator (`src/game/compare.js`) reads the
+  two deterministic frame streams and surfaces a ranked, timeline-ordered handful of
+  **notable moments** — the directional fork, a rider left behind (fairness), commit
+  vs. thrash, who finishes first, biggest spread — each a non-spoiler note with a tick
+  the synced replay jumps to. Quiet when the two runs are near-identical. Tested in
+  `test/compare.test.js`.
 - **7C — concept/docs panel + onboarding + worked references:**
   - *A concept / docs panel* — name the CS idea behind each level (scheduling, SCAN /
     LOOK, multi-car dispatch, zoning + transfers) and link out — "name the concept,

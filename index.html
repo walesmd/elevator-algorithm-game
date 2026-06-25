@@ -154,6 +154,40 @@
       .cmp-mark { color:#7fd6a8; font-weight:700; }
       .cmp-watch { padding:3px 9px; font-size:12px; }
 
+      /* --- Phase 7B: A/B compare (two buildings, synced, with notable moments) --- */
+      .ab-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:4px 0 2px; }
+      .ab-label { color:var(--muted); font-size:12.5px; }
+      .ab-vs { color:var(--muted); font-size:12px; }
+      .ab-select { background:var(--panel); color:var(--ink); border:1px solid var(--line); border-radius:6px; padding:5px 8px; font-size:12.5px; }
+      .ab-select:focus { border-color:var(--accent); outline:none; }
+      .compare-view { padding:16px 20px 4px; border-top:1px solid var(--line); }
+      .compare-view[hidden] { display:none; }
+      .compare-head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+      .compare-head h2 { margin:0; }
+      .compare-sub { color:var(--muted); font-size:12.5px; margin:2px 0 12px; }
+      .compare-stages { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+      .compare-col { min-width:0; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px; }
+      .compare-label { font-weight:600; font-size:13px; margin-bottom:8px; }
+      .compare-label .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; vertical-align:middle; }
+      .compare-label.a .dot { background:var(--accent); }
+      .compare-label.b .dot { background:#b98bff; }
+      .compare-canvas-wrap { position:relative; height:340px; background:#0a0f14; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+      .compare-canvas-wrap canvas { width:100%; height:100%; display:block; }
+      .compare-col .hud { margin-top:8px; }
+      .compare-controls { margin-top:12px; }
+      .compare-moments { margin-top:14px; display:grid; gap:8px; }
+      .compare-moments h3 { font-size:14px; margin:0 0 2px; }
+      .moments-intro { color:var(--muted); font-size:12.5px; margin:0 0 4px; }
+      .moment { text-align:left; background:#161d26; border:1px solid var(--line); border-left:3px solid var(--accent); border-radius:8px; padding:9px 11px; cursor:pointer; color:var(--ink); display:block; width:100%; }
+      .moment:hover, .moment:focus-visible { border-color:var(--accent); outline:none; }
+      .moment-head { display:flex; align-items:baseline; gap:8px; }
+      .moment-jump { font:11px ui-monospace,monospace; color:var(--accent); }
+      .moment-title { font-weight:600; font-size:13px; }
+      .moment-note { color:var(--muted); font-size:12.5px; margin:4px 0 0; }
+      .moment.kind-fairness { border-left-color:#ffcf6b; }
+      .moment.kind-fairness .moment-jump { color:#ffcf6b; }
+      .compare-empty { color:var(--muted); font-size:13px; }
+
       /* --- Responsive: stack to a single column on narrow screens so the editor and
              building stop fighting over width (below this they'd overflow the page). --- */
       @media (max-width: 880px) {
@@ -163,6 +197,8 @@
         header { padding:12px 14px; }
         #level-bar { padding:12px 14px 0; }
         .note { padding:0 14px 20px; }
+        .compare-view { padding:14px; }
+        .compare-stages { grid-template-columns:1fr; }
       }
       @media (max-width: 560px) {
         .cm { height:300px; }
@@ -240,11 +276,54 @@
           <div class="gallery-actions">
             <button id="compare-all" class="ghost">Compare them all on this level</button>
           </div>
+          <div class="ab-actions">
+            <span class="ab-label">Or watch two side by side:</span>
+            <select id="cmp-a" class="ab-select" aria-label="Algorithm A"></select>
+            <span class="ab-vs">vs</span>
+            <select id="cmp-b" class="ab-select" aria-label="Algorithm B"></select>
+            <button id="compare-ab" class="ghost">Compare A vs B →</button>
+          </div>
           <div id="gallery-list" class="gallery-list"></div>
           <div id="comparison" class="comparison"></div>
         </details>
       </section>
     </main>
+
+    <section id="compare-view" class="compare-view" hidden aria-label="Compare two algorithms">
+      <div class="compare-head">
+        <h2>A / B compare</h2>
+        <button id="compare-close" class="ghost">Close</button>
+      </div>
+      <p class="compare-sub" id="compare-sub"></p>
+      <div class="compare-stages">
+        <div class="compare-col">
+          <div class="compare-label a" id="cmp-label-a"><span class="dot"></span><span></span></div>
+          <div class="compare-canvas-wrap"><canvas id="cmp-stage-a"></canvas></div>
+          <div class="hud" id="cmp-hud-a"></div>
+        </div>
+        <div class="compare-col">
+          <div class="compare-label b" id="cmp-label-b"><span class="dot"></span><span></span></div>
+          <div class="compare-canvas-wrap"><canvas id="cmp-stage-b"></canvas></div>
+          <div class="hud" id="cmp-hud-b"></div>
+        </div>
+      </div>
+      <div class="playback compare-controls">
+        <button id="cmp-pp" class="pp">▶ Play</button>
+        <button id="cmp-step" title="Advance one tick">Step ›</button>
+        <button id="cmp-restart" title="Back to the start">↺ Restart</button>
+        <span class="speeds" id="cmp-speeds" role="group" aria-label="Playback speed">
+          <button data-speed="1" class="active" aria-pressed="true">1×</button>
+          <button data-speed="2" aria-pressed="false">2×</button>
+          <button data-speed="4" aria-pressed="false">4×</button>
+          <button data-speed="32" aria-pressed="false">Max</button>
+        </span>
+      </div>
+      <div class="scrub-row">
+        <input type="range" id="cmp-scrub" min="0" max="0" value="0" step="1" aria-label="Scrub both runs" />
+        <span id="cmp-tick">— / —</span>
+      </div>
+      <div class="compare-moments" id="cmp-moments"></div>
+    </section>
 
     <p class="note">
       Runs entirely in your browser — no server, no network. Your code runs in a sandboxed Web Worker with a timeout

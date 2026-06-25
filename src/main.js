@@ -17,6 +17,8 @@ import { renderBrief, renderResults, renderComparison, renderHints } from './gam
 import { analyze } from './game/analyzer.js';
 import { createRenderer } from './render/renderer.js';
 import { createPlayer } from './render/playback.js';
+import { createSyncPlayer } from './render/syncplayer.js';
+import { findMoments } from './game/compare.js';
 import { createEditor } from './render/editor.js';
 import { createHarness } from './sandbox/harness.js';
 import { gallery, getReference } from './reference/gallery.js';
@@ -33,6 +35,9 @@ let galleryReady = false;
 // run-specific Hint 2, refreshed after each run.
 let hintState = { revealed: 0, runHint: null };
 const viz = { renderer: null, player: null, speed: 1 };
+// A/B compare (Phase 7B): two renderers driven by one synced player.
+const cmp = { rA: null, rB: null, player: null };
+let cmpSpeed = 1;
 
 async function run() {
   if (running) return; // ignore re-entry while a run is in flight
@@ -85,6 +90,7 @@ function setRunning(on) {
   // Freeze the gallery while a sandboxed run is in flight, so a Watch/Compare can't
   // clobber the replay/HUD that the pending run is about to populate.
   els.compareBtn.disabled = on;
+  els.compareAbBtn.disabled = on;
   for (const b of els.galleryList.querySelectorAll('button')) b.disabled = on;
   if (on) els.results.innerHTML = '<p class="hint">Running your algorithm in a sandbox…</p>';
 }
@@ -253,6 +259,123 @@ function compareAll() {
   revealInView(els.comparison, 'start');
 }
 
+// --- A/B compare: two algorithms, two buildings, one synced clock (Phase 7B) --
+
+// Fill both pickers with "Your code" + the gallery algorithms. Done lazily when the
+// (spoiler) gallery first opens, so reference names aren't in the DOM until opted in.
+function populateCompareSelects() {
+  const opts = ['<option value="__player__">Your code</option>']
+    .concat(gallery.map((g) => `<option value="${escapeHtml(g.id)}">${escapeHtml(g.name)}</option>`))
+    .join('');
+  els.cmpA.innerHTML = opts;
+  els.cmpB.innerHTML = opts;
+  els.cmpA.value = '__player__'; // a useful default: your code…
+  els.cmpB.value = 'look'; // …against par (LOOK)
+}
+
+// Resolve a picker choice to a recorded run on (level, seed). The player's code runs
+// in the sandbox (async); references run on the main thread (trusted, sync).
+async function resolveRun(choice, level, seed) {
+  if (choice === '__player__') {
+    const res = await harness.score({ code: editor.getValue(), level, seeds: [seed], recordSeed: seed });
+    return { frames: res.frames || [], metrics: res.perSeed[0] && res.perSeed[0].metrics, label: 'Your code' };
+  }
+  const ref = getReference(choice);
+  const rec = runSimulation(level, seed, ref.createController, { record: true });
+  return { frames: rec.frames, metrics: rec.metrics, label: ref.id.toUpperCase() };
+}
+
+async function compareAB() {
+  if (running) return; // don't fight an in-flight scoring run for the worker/HUD
+  const level = currentLevel;
+  const seed = level.seeds[0];
+  els.compareView.hidden = false;
+  els.compareSub.textContent = 'Running both algorithms…';
+  els.cmpMoments.innerHTML = '';
+  els.compareAbBtn.disabled = true;
+  revealInView(els.compareView, 'start');
+  try {
+    const A = await resolveRun(els.cmpA.value, level, seed);
+    const B = await resolveRun(els.cmpB.value, level, seed);
+    if (level !== currentLevel) return; // switched levels mid-run
+    if (!A.frames.length || !B.frames.length) {
+      els.compareSub.textContent = 'One side produced no run (your code may have errored or timed out). Fix it and try again.';
+      return;
+    }
+    setupCompare(level, seed, A, B);
+  } catch (err) {
+    els.compareSub.textContent = `Couldn’t run the comparison: ${messageOf(err)}`;
+  } finally {
+    els.compareAbBtn.disabled = false;
+  }
+}
+
+function setupCompare(level, seed, A, B) {
+  if (cmp.player) cmp.player.destroy();
+  cmp.rA = createRenderer(els.cmpStageA, level); // canvases are visible now, so they size correctly
+  cmp.rB = createRenderer(els.cmpStageB, level);
+  setCompareLabel(els.cmpLabelA, A.label);
+  setCompareLabel(els.cmpLabelB, B.label);
+  els.compareSub.textContent = `${level.name.split('—')[0].trim()} · seed ${seed} · ${A.label} vs ${B.label} (both on the same traffic)`;
+
+  cmp.player = createSyncPlayer(
+    [{ frames: A.frames, renderer: cmp.rA }, { frames: B.frames, renderer: cmp.rB }],
+    { onFrame: updateCompareHud, onEnd: syncCmpPlayPause }
+  );
+  els.cmpScrub.max = String(cmp.player.tickCount);
+  els.cmpScrub.value = '0';
+  renderMoments(findMoments(A, B, level));
+  cmp.player.setSpeed(cmpSpeed);
+  cmp.player.play();
+  syncCmpPlayPause();
+}
+
+function setCompareLabel(el, text) {
+  el.querySelector('span:last-child').textContent = text;
+}
+
+function updateCompareHud(tick, per) {
+  els.cmpScrub.value = String(tick);
+  els.cmpTick.textContent = `${tick} / ${cmp.player.tickCount}`;
+  const fmt = (p) =>
+    p && p.frame
+      ? `t=${p.frame.t} · delivered ${p.frame.delivered}/${p.frame.total} · riding ${p.frame.riding} · waiting ${p.frame.waiting.length} · dist ${p.frame.distance}`
+      : '';
+  els.cmpHudA.textContent = fmt(per[0]);
+  els.cmpHudB.textContent = fmt(per[1]);
+}
+
+function syncCmpPlayPause() {
+  const playing = cmp.player && cmp.player.playing;
+  els.cmpPp.textContent = playing ? '❚❚ Pause' : '▶ Play';
+}
+
+function renderMoments(moments) {
+  if (!moments.length) {
+    els.cmpMoments.innerHTML =
+      '<p class="compare-empty">These two run almost identically on this level — try two more different strategies (say, FCFS vs LOOK) to see where the choice of algorithm actually changes the outcome.</p>';
+    return;
+  }
+  els.cmpMoments.innerHTML = `
+    <h3>Notable moments</h3>
+    <p class="moments-intro">The few points where the two strategies diverge. Click one to jump both replays there and watch.</p>
+    ${moments
+      .map(
+        (m) => `<button class="moment kind-${m.kind}" data-t="${m.t}" type="button">
+          <span class="moment-head"><span class="moment-jump">▶ t=${m.t}</span> <span class="moment-title">${escapeHtml(m.title)}</span></span>
+          <p class="moment-note">${escapeHtml(m.note)}</p>
+        </button>`
+      )
+      .join('')}`;
+}
+
+function closeCompare() {
+  if (cmp.player) { cmp.player.destroy(); cmp.player = null; }
+  cmp.rA = null;
+  cmp.rB = null;
+  els.compareView.hidden = true;
+}
+
 // --- Progression: level select, unlock state, persistence -----------------
 
 const starsOf = (id) => getBest(id).stars || 0;
@@ -314,6 +437,7 @@ function selectLevel(level) {
   editor.setValue(loadCode(level.id) || STARTER_CODE);
   els.results.innerHTML = '<p class="hint">Press Run to score your algorithm and watch it drive the building.</p>';
   els.comparison.innerHTML = ''; // stale: it was for the previous level
+  closeCompare(); // the A/B view was for the previous level's geometry/traffic
   renderLevelBar();
   // Build a renderer sized for THIS level's geometry, then show the static building.
   viz.renderer = createRenderer(els.canvas, level);
@@ -350,6 +474,7 @@ function bindControls() {
   els.gallery.addEventListener('toggle', () => {
     if (els.gallery.open && !galleryReady) {
       populateGallery();
+      populateCompareSelects();
       galleryReady = true;
     }
   });
@@ -385,6 +510,31 @@ function bindControls() {
     const btn = e.target.closest('button.cmp-watch');
     if (btn) watchReference(btn.dataset.id);
   });
+
+  // A/B compare: run, close, synced transport, moment jumps, speed.
+  els.compareAbBtn.addEventListener('click', compareAB);
+  els.compareClose.addEventListener('click', closeCompare);
+  els.cmpPp.addEventListener('click', () => { cmp.player?.toggle(); syncCmpPlayPause(); });
+  els.cmpStep.addEventListener('click', () => { cmp.player?.step(1); syncCmpPlayPause(); });
+  els.cmpRestart.addEventListener('click', () => { cmp.player?.restart(); syncCmpPlayPause(); });
+  els.cmpScrub.addEventListener('input', () => { cmp.player?.seek(Number(els.cmpScrub.value)); syncCmpPlayPause(); });
+  els.cmpMoments.addEventListener('click', (e) => {
+    const btn = e.target.closest('button.moment');
+    if (!btn || !cmp.player) return;
+    cmp.player.seek(Number(btn.dataset.t));
+    syncCmpPlayPause();
+  });
+  for (const btn of els.cmpSpeeds.children) {
+    btn.addEventListener('click', () => {
+      cmpSpeed = Number(btn.dataset.speed);
+      cmp.player?.setSpeed(cmpSpeed);
+      for (const b of els.cmpSpeeds.children) {
+        const on = b === btn;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-pressed', String(on));
+      }
+    });
+  }
   for (const btn of els.speedBar.children) {
     btn.addEventListener('click', () => {
       viz.speed = Number(btn.dataset.speed);
@@ -398,14 +548,23 @@ function bindControls() {
   }
 
   // Keep the canvas crisp and correctly laid out as the panel resizes.
+  // Keep the A/B canvases crisp on resize too (only when the compare view is open).
+  const resizeCompare = () => {
+    if (!cmp.player || els.compareView.hidden) return;
+    cmp.rA?.resize();
+    cmp.rB?.resize();
+    cmp.player.paint();
+  };
   if (typeof ResizeObserver !== 'undefined') {
     const ro = new ResizeObserver(() => {
       if (viz.renderer) {
         viz.renderer.resize();
         repaint();
       }
+      resizeCompare();
     });
     ro.observe(els.stageWrap);
+    window.addEventListener('resize', resizeCompare);
   } else {
     window.addEventListener('resize', () => {
       if (viz.renderer) {
@@ -446,6 +605,26 @@ function init() {
     galleryList: document.getElementById('gallery-list'),
     comparison: document.getElementById('comparison'),
     compareBtn: document.getElementById('compare-all'),
+    // A/B compare (Phase 7B)
+    cmpA: document.getElementById('cmp-a'),
+    cmpB: document.getElementById('cmp-b'),
+    compareAbBtn: document.getElementById('compare-ab'),
+    compareView: document.getElementById('compare-view'),
+    compareSub: document.getElementById('compare-sub'),
+    compareClose: document.getElementById('compare-close'),
+    cmpLabelA: document.getElementById('cmp-label-a'),
+    cmpLabelB: document.getElementById('cmp-label-b'),
+    cmpStageA: document.getElementById('cmp-stage-a'),
+    cmpStageB: document.getElementById('cmp-stage-b'),
+    cmpHudA: document.getElementById('cmp-hud-a'),
+    cmpHudB: document.getElementById('cmp-hud-b'),
+    cmpPp: document.getElementById('cmp-pp'),
+    cmpStep: document.getElementById('cmp-step'),
+    cmpRestart: document.getElementById('cmp-restart'),
+    cmpScrub: document.getElementById('cmp-scrub'),
+    cmpTick: document.getElementById('cmp-tick'),
+    cmpSpeeds: document.getElementById('cmp-speeds'),
+    cmpMoments: document.getElementById('cmp-moments'),
     toast: document.getElementById('toast'),
   };
 
