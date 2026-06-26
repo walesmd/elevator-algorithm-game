@@ -127,6 +127,25 @@
       .legend .red::before { background:#ff5d52; }
       .legend-glyphs { color:var(--muted); font-size:11px; margin:4px 0 0; }
       .legend-glyphs .cc { color:var(--accent); }
+      /* --- Phase 10: seed switcher + per-seed breakdown --- */
+      .seed-switcher { display:flex; align-items:center; gap:5px; flex-wrap:wrap; margin-top:10px; font-size:12px; }
+      .seed-switcher[hidden] { display:none; }
+      .seed-switcher .seed-label { color:var(--muted); margin-right:2px; }
+      .seed-chip { background:var(--panel); color:var(--muted); border:1px solid var(--line); border-radius:6px;
+                   padding:3px 9px; cursor:pointer; font:12px ui-monospace,monospace; }
+      .seed-chip:hover:not(:disabled) { border-color:var(--accent); color:var(--ink); }
+      .seed-chip.active { border-color:var(--accent); color:var(--accent); font-weight:600; }
+      .seed-chip:disabled { opacity:.5; cursor:default; }
+      table.per-seed { width:100%; border-collapse:collapse; margin:6px 0 0; font-size:12px; }
+      table.per-seed th, table.per-seed td { text-align:right; padding:3px 7px; border-bottom:1px solid var(--line); white-space:nowrap; }
+      table.per-seed th:first-child, table.per-seed td:first-child { text-align:left; }
+      table.per-seed th { color:var(--muted); font-weight:500; }
+      table.per-seed tr.watchable { cursor:pointer; }
+      table.per-seed tr.watchable:hover td { background:#10242e; }
+      table.per-seed tr.active td { color:var(--accent); }
+      table.per-seed tr.worst td.seed-comp { color:var(--accent); }
+      table.per-seed tr.undelivered td { color:#ffb4a8; }
+      .per-seed-note { color:var(--muted); font-size:11.5px; margin:8px 0 2px; }
 
       /* --- Phase 4: reference-algorithm gallery & comparison (opt-in spoilers) --- */
       .gallery { margin-top:16px; border-top:1px solid var(--line); padding-top:12px; }
@@ -329,6 +348,7 @@
             <input type="range" id="scrub" min="0" max="0" value="0" step="1" disabled aria-label="Scrub through the run" />
             <span id="tick-label">— / —</span>
           </div>
+          <div id="seed-switcher" class="seed-switcher" hidden role="group" aria-label="Watch a scoring seed"></div>
           <div class="legend">
             <span class="ok">waiting</span>
             <span class="warn">waited a while</span>

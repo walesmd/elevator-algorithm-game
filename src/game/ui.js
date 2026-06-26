@@ -57,6 +57,7 @@ export function renderResults(el, result, best) {
         }</td></tr>
       </table>
       <p class="feedback">${escape(result.analysis ? result.analysis.feedback : feedbackFor(result))}</p>
+      ${perSeedTable(result)}
       ${best ? `<p class="best">Best so far: ${stars(best.stars)}</p>` : ''}
       ${
         result.warnings && result.warnings.length
@@ -82,6 +83,48 @@ export function feedbackFor(result) {
     return `Everyone arrives — nice. But your average wait is well above par. Watch for riders you pass who want to go the same direction you're already heading. There's a classic strategy for this.`;
   }
   return `Solid run — everyone delivered and you're near par. Look for the single metric furthest from par and focus there.`;
+}
+
+// The seed switcher (Phase 10): a chip per scored seed on the replay, the active one
+// highlighted, so the player can watch any seed (not just seed 1). main.js handles clicks.
+export function renderSeedSwitcher(el, seeds, activeSeed) {
+  el.hidden = false;
+  el.innerHTML =
+    '<span class="seed-label">Watch seed:</span>' +
+    seeds
+      .map(
+        (s) => `<button class="seed-chip${s === activeSeed ? ' active' : ''}" data-seed="${s}" type="button" aria-pressed="${s === activeSeed}">${s}</button>`
+      )
+      .join('');
+}
+
+// Per-seed breakdown (Phase 10): make the multi-seed averaging visible. Each row is a
+// scored seed's result; the worst (highest composite) is flagged, undelivered seeds are
+// marked, and rows are clickable to watch that seed (main.js delegates the click). Needs
+// result.perSeed = [{ seed, metrics, composite }].
+function perSeedTable(result) {
+  const ps = result.perSeed;
+  if (!ps || ps.length <= 1) return '';
+  const worst = ps.reduce((a, b) => (b.composite > a.composite ? b : a), ps[0]);
+  const rows = ps
+    .map((p) => {
+      const m = p.metrics;
+      const cls = ['watchable'];
+      if (!m.deliveredAll) cls.push('undelivered');
+      if (p === worst) cls.push('worst');
+      return `<tr class="${cls.join(' ')}" data-seed="${p.seed}" title="Watch seed ${p.seed}">
+        <td>seed ${p.seed}</td><td>${fmt(m.avgWait)}</td><td>${fmt(m.distance)}</td>
+        <td>${m.delivered}/${m.total}${m.deliveredAll ? '' : ' ✗'}</td>
+        <td class="seed-comp">${fmt(p.composite)}</td></tr>`;
+    })
+    .join('');
+  return `
+    <p class="per-seed-note">Scored as the average of ${ps.length} runs on different passenger
+    sequences — so a single lucky (or unlucky) crowd can't decide your score. Click a seed to watch it.</p>
+    <table class="per-seed">
+      <thead><tr><th>Seed</th><th>Avg wait</th><th>Distance</th><th>Delivered</th><th>Score*</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
 }
 
 // Tiered hints (Phase 7), opt-in and progressive. Three rungs — the idea (Hint 1),

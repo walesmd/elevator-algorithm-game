@@ -29,6 +29,9 @@ const L2 = getLevel('l2');
 const curriculum = levels.filter((L) => !((L.numCols ?? 1) > 1));
 const starterFor = (L) => compileController(L.starter || STARTER_CODE);
 
+// Phase 10: every level scores over eight seeds (up from five).
+assert(levels.every((L) => L.seeds.length === 8), 'every level scores over 8 seeds');
+
 // --- 1. Roster shape --------------------------------------------------------
 {
   assert(gallery.length === 4, 'gallery has four reference algorithms');

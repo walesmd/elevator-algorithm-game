@@ -29,7 +29,9 @@ What works today:
   algorithm into the editor, **watch** it drive the current level in the Canvas,
   or **compare them** side by side (stars + metrics, best-in-column highlighted) —
   so you can feel, on any level, why one strategy beats another.
-- Multi-seed scoring with reference-anchored 1/2/3 stars (`src/game/scoring.js`).
+- Multi-seed scoring with reference-anchored 1/2/3 stars (`src/game/scoring.js`):
+  eight seeds per level, averaged, with a per-seed breakdown and a seed switcher so any
+  scored seed can be watched in the replay (Phase 10).
 - A **live Canvas visualization** (`src/render/`): press Run and watch your
   algorithm drive the building — shaft(s), car(s), riders waiting on each floor
   (who warm yellow → red the longer they wait, so you *see* starvation), with
