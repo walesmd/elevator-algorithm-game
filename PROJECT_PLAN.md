@@ -657,6 +657,58 @@ synthesized stations; and mute state, chosen station, and "onboarding seen" all 
 across reloads. No audio files ship; nothing about gameplay, scoring, or the engine
 changes.
 
+**Phase 10 — Seed transparency & a seed switcher.** Right now the score is the average
+over a level's fixed seeds (`[1,2,3,4,5]`) but the player can't *see* that: only seed 1
+is ever visualized, and the per-seed numbers are invisible behind the aggregate. This
+phase makes the multi-seed nature legible and explorable, and revisits whether five
+seeds is the right number.
+
+- **Make the aggregate honest and visible.** After a run, show a small **per-seed
+  breakdown** alongside the averaged result — each seed's key metrics and stars — with a
+  one-line explanation ("your score is the mean across these N runs, so you can't get
+  lucky with one passenger sequence"). This directly answers the standing "overfitting
+  to seeds" risk in §10.
+- **A seed switcher on the visualization.** Today the replay is hardwired to
+  `recordSeed = seeds[0]`. Add a control (a row of seed chips / a dropdown) to pick
+  which seed to watch; selecting one re-runs *just that seed* with recording on and
+  loads it into the existing replay. Player code re-runs through the sandbox worker;
+  references re-run on the main thread. We keep recording a single seed at a time
+  (re-run on demand) rather than fattening every run's payload with frames for all
+  seeds — the replay path and memory stay as they are.
+- **Watch the references per seed too.** The gallery's "watch" already records on
+  demand; route it through the same seed selection so a learner can compare their car
+  and a reference on the *same* seed they're studying.
+
+*How many seeds? (decided: eight.)* Five is a defensible minimum but a little thin for
+fairness, so we're moving every level from five scoring seeds to **eight**. Two
+clarifications shaped the call:
+
+- **More seeds ≠ a busier scenario.** Each seed already generates a full random
+  passenger set; adding seeds doesn't make any single run more dynamic — it makes the
+  *average* more representative and harder to overfit. If a scenario itself feels too
+  tame, that's a spawn-count / traffic-shape change for that level, not a seed-count
+  change. (Worth a separate pass if levels feel samey.)
+- **The ceiling is the worker's time budget, not correctness.** Each extra scoring seed
+  is one more full simulation per Run, inside the sandbox watchdog (`budgetMs`, ~4 s).
+  The heavy levels (tall towers, the 24-floor capstone, long time limits) are the
+  binding constraint — too many seeds there risks a *valid* solution falsely timing out.
+
+  So we land on **eight** scoring seeds: a real anti-overfitting gain (the standard
+  error of the mean shrinks ~1/√n, so the jump from five is worthwhile while returns
+  past ~ten flatten), while staying comfortably inside the watchdog even on the heaviest
+  level (verify by measuring the eight-seed run time on the 24-floor capstone; if it
+  ever crowds the budget, fall back to a per-level seed count rather than dropping below
+  eight elsewhere). Since the reference-anchored thresholds and the broad-seed delivery
+  guards already hold across seeds 1–60, eight is safe — but re-run them after the change
+  to be sure. A larger pool of **practice seeds** the player can stress-test against
+  *without* every one counting toward the score (and hiding which seeds are the scored
+  ones, per §10) is a worthwhile follow-on, but not required for this phase.
+
+*DoD:* every level scores over **eight** seeds (up from five), verified within the
+worker budget with star thresholds still honest; after a run the player can see each
+scored seed's result and click any seed to watch it in the replay (their algorithm or a
+reference); the engine and determinism are unchanged.
+
 ---
 
 ## 10. Risks and open questions
