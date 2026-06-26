@@ -594,8 +594,8 @@ Gringotts mine-carts:
 that drives a car up/down AND left/right to deliver everyone; stars are
 reference-anchored; none of the eleven curriculum levels change.
 
-**Phase 9 — Elevator music: a procedural radio.** It's an elevator game; it should
-have elevator music. This phase adds ambient, *programmatically generated* music with
+**Phase 9 — Elevator music: a procedural radio. ✅ DONE.** It's an elevator game; it
+should have elevator music. This phase adds ambient, *programmatically generated* music with
 a floating mute control and a GTA / Forza-style station picker — six "radio stations,"
 each a different genre, each synthesized live in the browser. Pure atmosphere and fun;
 it must never get in the way of playing or learning.

@@ -11,7 +11,8 @@
 import { levels } from './game/levels.js';
 import { scoreFromPlayerRuns, scoreLevel } from './game/scoring.js';
 import { runSimulation } from './engine/simulation.js';
-import { saveResult, getBest, saveCode, loadCode, saveLastLevel, loadLastLevel, getFlag, setFlag } from './game/progress.js';
+import { saveResult, getBest, saveCode, loadCode, saveLastLevel, loadLastLevel, getFlag, setFlag, getSetting, setSetting } from './game/progress.js';
+import { createRadio } from './audio/engine.js';
 import { isUnlocked } from './game/progression.js';
 import { renderBrief, renderResults, renderComparison, renderHints } from './game/ui.js';
 import { analyze } from './game/analyzer.js';
@@ -488,6 +489,59 @@ function selectLevel(level) {
   resetStage();
 }
 
+// --- Phase 9: procedural elevator-music radio ----------------------------------
+
+let radio = null;
+
+function setupRadio() {
+  radio = createRadio({
+    stationId: getSetting('audioStation', 'lobby-lounge'),
+    muted: getSetting('audioMuted', true), // off by default — autoplay-safe, never a surprise
+    volume: getSetting('audioVolume', 0.6),
+  });
+  renderRadio();
+
+  els.radioMute.addEventListener('click', () => {
+    const muted = radio.toggleMute(); // the click is the user gesture that lets audio start
+    setSetting('audioMuted', muted);
+    renderRadio();
+  });
+  const flip = (dir) => {
+    radio.cycle(dir);
+    setSetting('audioStation', radio.stationId);
+    renderRadio();
+  };
+  els.radioPrev.addEventListener('click', () => flip(-1));
+  els.radioNext.addEventListener('click', () => flip(1));
+
+  // Hush while the tab is in the background; resume when it returns (if unmuted).
+  document.addEventListener('visibilitychange', () => radio.setHidden(document.hidden));
+
+  // A returning player who left the radio ON can't be auto-started (browsers block
+  // audio until a gesture), so resume on their first interaction with the page.
+  if (!radio.muted) {
+    const resume = () => {
+      radio.setMuted(false);
+      window.removeEventListener('pointerdown', resume);
+      window.removeEventListener('keydown', resume);
+    };
+    window.addEventListener('pointerdown', resume);
+    window.addEventListener('keydown', resume);
+  }
+}
+
+function renderRadio() {
+  const muted = radio.muted;
+  els.radio.classList.toggle('muted', muted);
+  els.radioMute.classList.toggle('on', !muted);
+  els.radioMute.textContent = muted ? '🔇' : '🔊';
+  els.radioMute.setAttribute('aria-pressed', String(!muted));
+  els.radioMute.title = muted ? 'Play the music' : 'Mute the music';
+  els.radioName.textContent = radio.stationName;
+  const st = radio.stations.find((s) => s.id === radio.stationId);
+  els.radioGenre.textContent = muted ? 'muted' : (st ? st.genre : '');
+}
+
 // --- Onboarding: a one-time welcome, reopenable from the header (Phase 7C) -----
 
 function showOnboarding() {
@@ -696,6 +750,13 @@ function init() {
     onboarding: document.getElementById('onboarding'),
     onboardingGo: document.getElementById('onboarding-go'),
     howItWorks: document.getElementById('how-it-works'),
+    // Radio (Phase 9)
+    radio: document.getElementById('radio'),
+    radioMute: document.getElementById('radio-mute'),
+    radioPrev: document.getElementById('radio-prev'),
+    radioNext: document.getElementById('radio-next'),
+    radioName: document.getElementById('radio-name'),
+    radioGenre: document.getElementById('radio-genre'),
   };
 
   harness = createHarness({ budgetMs: 4000 });
@@ -707,6 +768,7 @@ function init() {
   });
 
   bindControls();
+  setupRadio();
   // The level bar is built by selectLevel -> renderLevelBar. Resume where the
   // player left off (if that level is still unlocked), else start at level 1.
   selectLevel(resumeLevel());

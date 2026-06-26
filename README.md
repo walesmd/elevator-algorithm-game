@@ -76,11 +76,16 @@ What works today:
   2-D grid — *The Great Glass Elevator* (one free-roaming car) and *Gringotts* (three
   carts) — where a car moves left/right as well as up/down. Grid-aware references
   anchor their stars; a dedicated grid renderer draws the 2-D building.
+- **Elevator music** (Phase 9): a floating radio widget with a mute toggle and a
+  six-station, GTA/Forza-style picker — every station is *synthesized live* with the
+  Web Audio API (no audio files ship, so it stays offline and licence-free), each a
+  distinct generically-named genre. Off by default (autoplay-safe); mute, station, and
+  volume persist across visits.
 - Passing headless tests (`simulation`, `recording`, `phase3`, `references`,
-  `progression`, `analyzer`, `compare`, `content`, `grid`).
+  `progression`, `analyzer`, `compare`, `content`, `grid`, `audio`).
 
-All eight phases are built. (The original "sharing & challenge" Phase 8 was retired in
-favor of the sideways-elevator bonus levels.)
+All nine phases are built. (The original "sharing & challenge" Phase 8 was retired in
+favor of the sideways-elevator bonus levels; Phase 9 added the procedural radio.)
 
 ## Run it
 
