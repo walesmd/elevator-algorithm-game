@@ -657,7 +657,7 @@ synthesized stations; and mute state, chosen station, and "onboarding seen" all 
 across reloads. No audio files ship; nothing about gameplay, scoring, or the engine
 changes.
 
-**Phase 10 — Seed transparency & a seed switcher.** Right now the score is the average
+**Phase 10 — Seed transparency & a seed switcher. ✅ DONE.** Right now the score is the average
 over a level's fixed seeds (`[1,2,3,4,5]`) but the player can't *see* that: only seed 1
 is ever visualized, and the per-seed numbers are invisible behind the aggregate. This
 phase makes the multi-seed nature legible and explorable, and revisits whether five

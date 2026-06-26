@@ -9,12 +9,12 @@
 // so a heavier editor can swap in later without touching this file.
 
 import { levels } from './game/levels.js';
-import { scoreFromPlayerRuns, scoreLevel } from './game/scoring.js';
+import { scoreFromPlayerRuns, scoreLevel, compositeOf } from './game/scoring.js';
 import { runSimulation } from './engine/simulation.js';
 import { saveResult, getBest, saveCode, loadCode, saveLastLevel, loadLastLevel, getFlag, setFlag, getSetting, setSetting } from './game/progress.js';
 import { createRadio } from './audio/engine.js';
 import { isUnlocked } from './game/progression.js';
-import { renderBrief, renderResults, renderComparison, renderHints } from './game/ui.js';
+import { renderBrief, renderResults, renderComparison, renderHints, renderSeedSwitcher } from './game/ui.js';
 import { analyze } from './game/analyzer.js';
 import { createRenderer } from './render/renderer.js';
 import { createPlayer } from './render/playback.js';
@@ -36,6 +36,11 @@ let galleryReady = false;
 // run-specific Hint 2, refreshed after each run.
 let hintState = { revealed: 0, runHint: null };
 const viz = { renderer: null, player: null, speed: 1 };
+// Seed switcher (Phase 10): which seed is in the replay, and what's being shown so a
+// seed click can re-run the right thing — the player's last-run code or a reference.
+let vizSeed = null;
+let vizSource = null; // { type:'player', code } | { type:'ref', id }
+let lastRunCode = null; // the code from the most recent scored run (for seed re-runs)
 // A/B compare (Phase 7B): two renderers driven by one synced player.
 const cmp = { rA: null, rB: null, player: null };
 let cmpSpeed = 1;
@@ -55,6 +60,9 @@ async function run() {
     // Diagnose the run (using the seed we visualize, so feedback matches what's shown).
     // prevBest is read BEFORE saveResult so "a new best!" is accurate.
     const prevBest = getBest(level.id);
+    // Per-seed breakdown (Phase 10): surface each scored seed, with its composite so the
+    // results card can flag the worst one and let the player click any seed to watch it.
+    result.perSeed = res.perSeed.map((p) => ({ seed: p.seed, metrics: p.metrics, composite: compositeOf(p.metrics, level.weights) }));
     result.analysis = analyze({
       frames: res.frames || [], metrics: result.metrics, par: result.par,
       level, prevBest, stars: result.stars,
@@ -73,7 +81,11 @@ async function run() {
     }
 
     if (res.frames && res.frames.length) {
-      visualize(res.frames, level.seeds[0], result.metrics.total);
+      lastRunCode = code;
+      vizSource = { type: 'player', code };
+      vizSeed = level.seeds[0];
+      visualize(res.frames, vizSeed, result.metrics.total);
+      renderSeedSwitcher(els.seedSwitcher, level.seeds, vizSeed);
     }
   } catch (err) {
     if (currentLevel !== level) return; // a failure for a level we already left
@@ -181,6 +193,10 @@ function resetStage() {
   els.scrub.max = '0';
   els.scrub.value = '0';
   els.tickLabel.textContent = '— / —';
+  els.seedSwitcher.hidden = true;
+  els.seedSwitcher.innerHTML = '';
+  vizSource = null;
+  vizSeed = null;
   syncPlayPause();
 }
 
@@ -269,12 +285,51 @@ function watchReference(id) {
   if (running) return; // don't fight an in-flight player run for the replay/HUD
   const ref = getReference(id);
   if (!ref) return;
-  const seed = currentLevel.seeds[0];
+  const seed = vizSeed && currentLevel.seeds.includes(vizSeed) ? vizSeed : currentLevel.seeds[0];
   const rec = runSimulation(currentLevel, seed, ref.createController, { record: true });
   if (!rec.frames.length) return;
+  vizSource = { type: 'ref', id };
+  vizSeed = seed;
   visualize(rec.frames, seed, rec.metrics.total);
   els.hudSeed.textContent = `${ref.name} · seed ${seed}`;
+  renderSeedSwitcher(els.seedSwitcher, currentLevel.seeds, vizSeed);
   revealInView(els.canvas, 'center');
+}
+
+// Re-run whatever's currently shown (the player's last run, or a reference) on a chosen
+// seed and load it into the replay — the heart of the seed switcher. Player code re-runs
+// in the sandbox; references run on the main thread.
+async function visualizeSeed(seed) {
+  if (!vizSource || running) return;
+  const level = currentLevel;
+  vizSeed = seed;
+  renderSeedSwitcher(els.seedSwitcher, level.seeds, vizSeed);
+  if (vizSource.type === 'ref') {
+    const ref = getReference(vizSource.id);
+    const rec = runSimulation(level, seed, ref.createController, { record: true });
+    if (rec.frames.length) {
+      visualize(rec.frames, seed, rec.metrics.total);
+      els.hudSeed.textContent = `${ref.name} · seed ${seed}`;
+    }
+    return;
+  }
+  // Player code: re-run just this seed in the sandbox to record it.
+  setSeedChipsBusy(true);
+  try {
+    const res = await harness.score({ code: vizSource.code, level, seeds: [seed], recordSeed: seed });
+    if (level !== currentLevel) return;
+    if (res.frames && res.frames.length) {
+      visualize(res.frames, seed, res.perSeed[0].metrics.total);
+    }
+  } catch (err) {
+    /* a seed re-run that fails leaves the prior replay in place; the run already scored */
+  } finally {
+    if (level === currentLevel) setSeedChipsBusy(false);
+  }
+}
+
+function setSeedChipsBusy(on) {
+  for (const b of els.seedSwitcher.querySelectorAll('.seed-chip')) b.disabled = on;
 }
 
 // Score all the references on the current level and show them side by side,
@@ -580,6 +635,19 @@ function bindControls() {
     renderHints(els.hints, currentLevel, hintState);
   });
 
+  // Seed switcher: chips on the replay, and clickable rows in the per-seed breakdown.
+  els.seedSwitcher.addEventListener('click', (e) => {
+    const chip = e.target.closest('.seed-chip');
+    if (chip && !chip.disabled) visualizeSeed(Number(chip.dataset.seed));
+  });
+  els.results.addEventListener('click', (e) => {
+    const row = e.target.closest('tr.watchable');
+    if (!row || !lastRunCode) return;
+    vizSource = { type: 'player', code: lastRunCode }; // the breakdown is the player's run
+    visualizeSeed(Number(row.dataset.seed));
+    revealInView(els.canvas, 'center');
+  });
+
   els.resetBtn.addEventListener('click', () => {
     if (!safeToReplaceEditor()) return;
     const code = starterFor(currentLevel);
@@ -720,6 +788,7 @@ function init() {
     restart: document.getElementById('restart'),
     scrub: document.getElementById('scrub'),
     tickLabel: document.getElementById('tick-label'),
+    seedSwitcher: document.getElementById('seed-switcher'),
     speedBar: document.querySelector('.speeds'),
     gallery: document.getElementById('gallery'),
     galleryList: document.getElementById('gallery-list'),

@@ -30,7 +30,7 @@ export const levels = [
     doorTicks: 2,
     timeLimit: 1000,
     spawn: { type: 'uniform', count: 10, firstTick: 0, lastTick: 150 },
-    seeds: [1, 2, 3, 4, 5],
+    seeds: [1, 2, 3, 4, 5, 6, 7, 8],
     weights: { wait: 1, journey: 0.5, distance: 0.1, undelivered: 1000 },
     brief: {
       situation: 'A small 5-floor building. People press buttons; your car is the only ride.',
@@ -50,7 +50,7 @@ export const levels = [
     doorTicks: 2,
     timeLimit: 2000,
     spawn: { type: 'uniform', count: 18, firstTick: 0, lastTick: 350 },
-    seeds: [1, 2, 3, 4, 5],
+    seeds: [1, 2, 3, 4, 5, 6, 7, 8],
     weights: { wait: 1, journey: 0.5, distance: 0.1, undelivered: 1000 },
     brief: {
       situation: 'Ten floors and a steady trickle of riders from every floor.',
@@ -70,7 +70,7 @@ export const levels = [
     doorTicks: 2,
     timeLimit: 2200,
     spawn: { type: 'up-peak', count: 30, firstTick: 0, lastTick: 250, lobbyBias: 0.9 },
-    seeds: [1, 2, 3, 4, 5],
+    seeds: [1, 2, 3, 4, 5, 6, 7, 8],
     weights: { wait: 1, journey: 0.5, distance: 0.1, undelivered: 1000 },
     brief: {
       situation: 'Morning rush. Almost everyone starts in the lobby, heading up to their floor.',
@@ -90,7 +90,7 @@ export const levels = [
     doorTicks: 2,
     timeLimit: 2600,
     spawn: { type: 'hotel', count: 24, firstTick: 0, lastTick: 450, lobbyBias: 0.9 },
-    seeds: [1, 2, 3, 4, 5],
+    seeds: [1, 2, 3, 4, 5, 6, 7, 8],
     weights: { wait: 1, journey: 0.5, distance: 0.1, undelivered: 1000 },
     brief: {
       situation: 'A hotel. Guests ride between their room and the lobby; they rarely go floor-to-floor.',
@@ -110,7 +110,7 @@ export const levels = [
     doorTicks: 2,
     timeLimit: 3000,
     spawn: { type: 'uniform', count: 26, firstTick: 0, lastTick: 220 },
-    seeds: [1, 2, 3, 4, 5],
+    seeds: [1, 2, 3, 4, 5, 6, 7, 8],
     weights: { wait: 1, journey: 0.5, distance: 0.1, undelivered: 1000 },
     brief: {
       situation: 'A sudden surge — a crowd of calls lands almost all at once, faster than a small car can clear it.',
@@ -130,7 +130,7 @@ export const levels = [
     doorTicks: 2,
     timeLimit: 4500,
     spawn: { type: 'uniform', count: 30, firstTick: 0, lastTick: 600 },
-    seeds: [1, 2, 3, 4, 5],
+    seeds: [1, 2, 3, 4, 5, 6, 7, 8],
     weights: { wait: 1, journey: 0.5, distance: 0.6, undelivered: 1000 },
     brief: {
       situation: 'Eighteen floors. Every trip up and down is long, and now the distance you travel is on the scoreboard.',
@@ -150,7 +150,7 @@ export const levels = [
     doorTicks: 2,
     timeLimit: 2500,
     spawn: { type: 'uniform', count: 34, firstTick: 0, lastTick: 280 },
-    seeds: [1, 2, 3, 4, 5],
+    seeds: [1, 2, 3, 4, 5, 6, 7, 8],
     weights: { wait: 1, journey: 0.5, distance: 0.1, undelivered: 1000 },
     brief: {
       situation: 'A second elevator comes online. Two cars now share one building and one waiting crowd.',
@@ -170,7 +170,7 @@ export const levels = [
     doorTicks: 2,
     timeLimit: 3000,
     spawn: { type: 'uniform', count: 42, firstTick: 0, lastTick: 200 },
-    seeds: [1, 2, 3, 4, 5],
+    seeds: [1, 2, 3, 4, 5, 6, 7, 8],
     weights: { wait: 1, journey: 0.5, distance: 0.1, undelivered: 1000 },
     brief: {
       situation: 'A bank of three cars, and a sudden surge — a big crowd of calls lands almost at once, spread across the building.',
@@ -190,7 +190,7 @@ export const levels = [
     doorTicks: 2,
     timeLimit: 4500,
     spawn: { type: 'uniform', count: 44, firstTick: 0, lastTick: 500 },
-    seeds: [1, 2, 3, 4, 5],
+    seeds: [1, 2, 3, 4, 5, 6, 7, 8],
     weights: { wait: 1, journey: 0.5, distance: 0.5, undelivered: 1000 },
     brief: {
       situation: 'A sixteen-floor tower with three cars and steady traffic from every floor — and long rides top to bottom.',
@@ -210,7 +210,7 @@ export const levels = [
     doorTicks: 2,
     timeLimit: 5000,
     spawn: { type: 'uniform', count: 36, firstTick: 0, lastTick: 288 },
-    seeds: [1, 2, 3, 4, 5],
+    seeds: [1, 2, 3, 4, 5, 6, 7, 8],
     // Two zoned shafts meeting at floor 10, the shared "sky-lobby".
     elevators: [
       { minFloor: 0, maxFloor: 10 },
@@ -235,7 +235,7 @@ export const levels = [
     doorTicks: 2,
     timeLimit: 5000,
     spawn: { type: 'uniform', count: 70, firstTick: 0, lastTick: 350 },
-    seeds: [1, 2, 3, 4, 5],
+    seeds: [1, 2, 3, 4, 5, 6, 7, 8],
     // Two zones of two cars each, meeting at floor 12 (the sky-lobby).
     elevators: [
       { minFloor: 0, maxFloor: 12 },
@@ -266,7 +266,7 @@ export const levels = [
     doorTicks: 2,
     timeLimit: 4000,
     spawn: { type: 'grid', count: 16, firstTick: 0, lastTick: 160 },
-    seeds: [1, 2, 3, 4, 5],
+    seeds: [1, 2, 3, 4, 5, 6, 7, 8],
     weights: { wait: 1, journey: 0.5, distance: 0.1, undelivered: 1000 },
     starter: GRID_STARTER_CODE,
     brief: {
@@ -289,7 +289,7 @@ export const levels = [
     doorTicks: 2,
     timeLimit: 6000,
     spawn: { type: 'vault', count: 48, firstTick: 0, lastTick: 320 },
-    seeds: [1, 2, 3, 4, 5],
+    seeds: [1, 2, 3, 4, 5, 6, 7, 8],
     weights: { wait: 1, journey: 0.5, distance: 0.1, undelivered: 1000 },
     starter: GRID_STARTER_CODE,
     brief: {
