@@ -709,6 +709,70 @@ worker budget with star thresholds still honest; after a run the player can see 
 scored seed's result and click any seed to watch it in the replay (their algorithm or a
 reference); the engine and determinism are unchanged.
 
+**Phase 11 — Tutorial mode: from naive to LOOK, one idea at a time.** A guided,
+opt-in track that derives the elevator algorithm step by step: start with the naive
+first-come-first-served controller, run it, *see* what goes wrong, fix that one thing,
+run again, and repeat until you've built your way up to a strong algorithm (LOOK, with
+SSTF shown as the greedy contrast). This is the hand-held counterpart to the
+struggle-first curriculum — likely **two-plus phases**, so it's planned as a framework
+(Phase 11) and then additional tracks (Phase 12).
+
+*Reconciling with the doctrine (this is the crux).* CLAUDE.md is firm: productive
+struggle, never paste the solution into a brief/hint/starter, spoilers are opt-in and
+earned. A step-by-step walkthrough is the opposite of that — so the tutorial is treated
+as the **sanctioned, opt-in exception**, the interactive sibling of the already-allowed
+"show me one approach (spoiler)" action. It never replaces or pre-empts the curriculum
+(you choose to enter it), and it preserves as much struggle as it can *inside* each
+step: a step states the problem and the idea, invites you to make the change yourself,
+and only reveals the exact change on a "show me" request. It also **shows rather than
+tells** by reusing what Phases 7 + 10 already built — the run analyzer to *diagnose* the
+problem from your real run, A/B compare to put this step's run next to the previous
+one, the concept notes, and the tiered-hint voice — so each step is a felt before/after,
+not a wall of prose.
+
+*The track (single-car), each step one concrete idea + one scoped change:*
+1. **FCFS** — serve one call at a time in arrival order (the shipped baseline). Run it;
+   the analyzer names the symptom: it backtracks and drives past riders going its way.
+2. **Collective pickup** — stop for same-direction riders as you pass them. (One change;
+   watch average wait fall.)
+3. **Commit to a direction (sweep / SCAN)** — keep a heading, serve everyone that way,
+   reverse at the ends.
+4. **Turn around early (LOOK)** — reverse the moment nothing's left ahead instead of
+   running to an empty end; watch the distance drop.
+5. **SSTF, as a contrast** — the greedy "nearest call" alternative: often a lower
+   average wait, but it thrashes and can starve a far call. Names the trade-off rather
+   than crowning a single "best."
+
+*Architecture (reuse, don't reinvent).*
+- **Content is data** (like levels / hints / concepts): a `tutorials` set of ordered
+  steps; each step carries its intro, the named concept, the starting code (the prior
+  step's solution), the scoped task, a revealable target ("show me the change"), and a
+  success check (a metric improvement over the previous step, not a fixed number).
+- Runs on **one fixed scenario + seed** so every step's before/after is reproducible and
+  the improvement is unambiguous (no eight-seed averaging here — this is a lesson, not a
+  score).
+- **Every step is verified by code, not vibes:** each step's starting and target code
+  compiles and runs, and each target measurably improves on the previous step on the
+  fixed scenario, ending at LOOK-level performance — the same "ships with a reference
+  solution" guarantee the levels have, applied to the lesson.
+- **Staged delivery:** 11A — the tutorial data model + the step engine (advance / reveal
+  / success-check) + verification tests, no UI; 11B — the guided UI (a tutorial panel:
+  step intro, seeded editor, Run→diagnose, "show me the change", "next" gated on the
+  success check, "exit"), with progress persisted in settings; 11C — the before/after
+  view (this step vs last via the A/B machinery) + polish and the SSTF contrast.
+
+*DoD (Phase 11):* from an opt-in entry point a learner is walked from FCFS to LOOK on a
+fixed scenario; each step diagnoses the prior run's problem (via the analyzer), asks for
+one scoped change (revealable on request), and shows a measurable improvement; tutorial
+progress persists; the curriculum and its struggle-first default are untouched.
+
+**Phase 12 — More tutorial tracks.** Once the framework exists, add tracks for the later
+ideas on the same rails: **multi-car dispatch** (one car → several cars that bunch →
+assign calls so they cover the building) and the **zoned skyscraper / sky-lobby
+transfer**. Optional, additive, and a natural home for the bring-your-own-key generative
+prose (richer plain-English step explanations) noted under Phase 7 — additive only,
+never required.
+
 ---
 
 ## 10. Risks and open questions
