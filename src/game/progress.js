@@ -73,6 +73,20 @@ export function setFlag(name, value = true) {
   write(data);
 }
 
+// Player settings that should survive a reload (e.g. radio mute / station / volume).
+// `getSetting` returns `fallback` when unset, so callers can ship sensible defaults.
+export function getSetting(name, fallback = null) {
+  const settings = read().settings || {};
+  return name in settings ? settings[name] : fallback;
+}
+
+export function setSetting(name, value) {
+  const data = read();
+  data.settings = data.settings || {};
+  data.settings[name] = value;
+  write(data);
+}
+
 // Remember which level the player was last on, so a reload resumes there.
 export function saveLastLevel(levelId) {
   const data = read();
