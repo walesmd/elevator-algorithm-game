@@ -594,6 +594,69 @@ Gringotts mine-carts:
 that drives a car up/down AND left/right to deliver everyone; stars are
 reference-anchored; none of the eleven curriculum levels change.
 
+**Phase 9 — Elevator music: a procedural radio.** It's an elevator game; it should
+have elevator music. This phase adds ambient, *programmatically generated* music with
+a floating mute control and a GTA / Forza-style station picker — six "radio stations,"
+each a different genre, each synthesized live in the browser. Pure atmosphere and fun;
+it must never get in the way of playing or learning.
+
+*Hard constraint — generate, never ship audio.* No `.wav` / `.mp3` / `.ogg` assets and
+no streamed audio: every station is synthesized at runtime with the Web Audio API
+(oscillators, a noise source, envelopes, filters, a small step sequencer / arpeggiator,
+and synthesized drums). This keeps us fully client-side and offline (consistent with
+the no-server / vendor-locally doctrine) and — because nothing is a recording — sidesteps
+licensing entirely. For the same reason every station gets a **generic, descriptive,
+non-trademarkable name** (no real station, label, artist, or brand references).
+
+- **The synth engine** (`src/audio/`, behind a thin interface like the editor and the
+  feedback provider). A small generative core: a master gain + mute, a tempo clock, a
+  scheduler that looks ahead and queues notes (the standard Web-Audio "tick ahead with
+  setTimeout, schedule precisely on the audio clock" pattern), and a few voice types
+  (poly synth, bass, pad, arp, and noise-based drums). A **station** is data: a scale /
+  key, tempo, chord progression, instrument palette, and drum pattern, plus a seeded
+  RNG so each station improvises endlessly without repeating a short loop. The engine
+  is DOM-free and swappable; the widget just tells it `play()`, `mute()`, `setStation()`.
+- **The six stations** (names and recipes are a starting point, all tunable). Each is a
+  distinct genre realized purely from synthesis:
+  1. *Lobby Lounge* — the classic "elevator muzak": soft electric-piano / vibe arps,
+     brushed light percussion, lush major-7th chords, slow. (The on-theme default.)
+  2. *Velvet Hour* — smooth jazz / bossa: warm chords, walking-ish bass, swung brushes.
+  3. *Corner Pocket* — boom-bap hip-hop: swung synth drums, dusty Rhodes-style chords,
+     a laid-back ~85 BPM groove.
+  4. *Night Circuit* — synthwave / electronic: saw-wave bass, bright arpeggios, a
+     four-on-the-floor kick and hats, minor key.
+  5. *Big Hair Boulevard* — '80s hair-rock: distorted square-wave power chords, driving
+     drums, a pentatonic lead.
+  6. *Eight-Bit Express* — chiptune: pure square / triangle waves and fast arpeggios, in
+     the spirit of old game audio (and the most naturally "generated" of the lot).
+- **The floating widget.** A small, draggable, always-reachable control that floats
+  over the page: a mute / unmute toggle, the current station name, and prev / next (or a
+  compact dropdown) to flip between stations — the car-radio feel. Keyboard-operable and
+  labelled for screen readers; never covers the editor or Run button at common sizes.
+- **Autoplay-safe and polite.** Browsers block audio until a user gesture, and surprise
+  audio is hostile — so music is **muted/off by default** and only starts on an explicit
+  unmute. It pauses when the tab is hidden (Page Visibility) and stays out of the way; a
+  gentle default volume. (There's no `prefers-reduced-motion` analog for sound, so the
+  always-available mute and off-by-default behavior are the accessibility story.)
+- **Remembered settings.** Persist the player's audio choices — muted/on, chosen
+  station, volume — in `localStorage` (a `settings` block in the existing store) so they
+  carry across visits. **Fold the onboarding state in here too:** dismissing the welcome
+  ("Let's go") already sets a persisted flag (Phase 7C), but Phase 9 should *verify it
+  survives a reload* and unify it with the new settings so a returning player is never
+  re-shown the intro and never has to re-set their radio.
+- **Testing.** Audio output can't be asserted headlessly (no Web Audio in Node), so tests
+  cover the data + persistence layer: the station registry (exactly six, unique generic
+  names, each with a complete generator recipe), the settings store (mute / station /
+  volume round-trip, and onboarding-seen persistence), and a headless-browser smoke check
+  that the engine constructs an `AudioContext` and starts/stops without throwing. The
+  synth core stays decoupled so it's swappable and never blocks the UI thread.
+
+*DoD:* the game plays silently by default; one click unmutes procedurally-generated
+music; a floating widget mutes/unmutes and switches among six generically-named,
+synthesized stations; and mute state, chosen station, and "onboarding seen" all persist
+across reloads. No audio files ship; nothing about gameplay, scoring, or the engine
+changes.
+
 ---
 
 ## 10. Risks and open questions
