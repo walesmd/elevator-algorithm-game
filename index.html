@@ -294,7 +294,14 @@
       table.tut-metrics tr.tut-prev td { color:var(--muted); }
       .tut-cleared { color:#7fd6a8; font-weight:600; font-size:13.5px; margin:10px 0 8px; }
       .tut-not-cleared { color:var(--muted); font-size:13px; margin:10px 0 0; }
-      .tut-next { margin-top:2px; }
+      .tut-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:2px; }
+      .tut-next { }
+      /* Before/after (Phase 11C): delta arrows + the trade-off note + the watch button */
+      .tut-arrow { font-size:11px; font-weight:600; }
+      .tut-arrow.good { color:#7fd6a8; }
+      .tut-arrow.bad { color:#ffcf6b; }
+      .tut-tradeoff { background:#2a2410; border-left:3px solid #ffcf6b; border-radius:4px; padding:8px 11px; margin:0 0 10px; font-size:13px; color:var(--ink); }
+      .tut-compare { font-size:12.5px; }
 
       /* --- Phase 9: floating procedural-radio widget --- */
       .radio { position:fixed; right:16px; bottom:16px; z-index:40; display:flex; align-items:center; gap:8px;
@@ -423,7 +430,7 @@
 
     <section id="compare-view" class="compare-view" hidden aria-label="Compare two algorithms">
       <div class="compare-head">
-        <h2>A / B compare</h2>
+        <h2 id="compare-heading">A / B compare</h2>
         <button id="compare-close" class="ghost">Close</button>
       </div>
       <p class="compare-sub" id="compare-sub"></p>

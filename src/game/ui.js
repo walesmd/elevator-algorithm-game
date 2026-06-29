@@ -261,23 +261,42 @@ export function renderTutorialStep(el, { step, index, total, revealed = false })
     </div>`;
 }
 
+// A "this step" metric cell, annotated with how it moved vs the previous step. Lower is
+// better for all three (wait, max wait, distance), so a drop is good (green ↓) and a
+// rise is worse (amber ↑) — which is exactly what makes the SSTF contrast legible (its
+// average drops while its worst case rises). No arrow when the value didn't move.
+function deltaCell(val, prev) {
+  if (prev == null) return `<td>${fmt(val)}</td>`;
+  const d = fmt(val) - fmt(prev);
+  if (d === 0) return `<td>${fmt(val)}</td>`;
+  const cls = d < 0 ? 'good' : 'bad';
+  const arrow = d < 0 ? '↓' : '↑';
+  return `<td>${fmt(val)} <span class="tut-arrow ${cls}">${arrow}${fmt(Math.abs(d))}</span></td>`;
+}
+
 // The post-run card. `prevStep`/`prevMetrics` give the before/after reference (null on
 // the first step). `analysis` is the analyzer's verdict on THIS run; `cleared` gates the
-// "next step" button (and on the last step it becomes "finish").
-export function renderTutorialResult(el, { metrics, analysis, cleared, prevStep, prevMetrics, isLast }) {
+// "next step" button (and on the last step it becomes "finish"). When there's a previous
+// step, a "watch before/after" button opens the side-by-side replay (Phase 11C).
+export function renderTutorialResult(el, { metrics, analysis, cleared, prevStep, prevMetrics, isLast, isContrast }) {
   if (!metrics) {
     el.innerHTML = '';
     return;
   }
   const m = metrics;
-  const compareRows = prevStep && prevMetrics
-    ? `<tr><td>This step</td><td>${fmt(m.avgWait)}</td><td>${fmt(m.maxWait)}</td><td>${fmt(m.distance)}</td></tr>
-       <tr class="tut-prev"><td>Previous (${escape(prevStep.id.toUpperCase())})</td><td>${fmt(prevMetrics.avgWait)}</td><td>${fmt(prevMetrics.maxWait)}</td><td>${fmt(prevMetrics.distance)}</td></tr>`
-    : `<tr><td>This step</td><td>${fmt(m.avgWait)}</td><td>${fmt(m.maxWait)}</td><td>${fmt(m.distance)}</td></tr>`;
-  const forward = cleared
-    ? `<div class="tut-cleared">✓ You’ve applied the idea${isLast ? ' — and that’s the whole track. Nicely done.' : '.'}</div>
-       <button class="primary tut-next" type="button">${isLast ? 'Finish ✓' : 'Next step →'}</button>`
-    : `<p class="tut-not-cleared">Not there yet — apply the change described on the left and run again. (Stuck? “Show me the change” reveals one way to do it.)</p>`;
+  const p = prevStep && prevMetrics ? prevMetrics : null;
+  const compareRows = `
+    <tr><td>This step</td>${deltaCell(m.avgWait, p && p.avgWait)}${deltaCell(m.maxWait, p && p.maxWait)}${deltaCell(m.distance, p && p.distance)}</tr>
+    ${p ? `<tr class="tut-prev"><td>Previous (${escape(prevStep.id.toUpperCase())})</td><td>${fmt(p.avgWait)}</td><td>${fmt(p.maxWait)}</td><td>${fmt(p.distance)}</td></tr>` : ''}`;
+  // The contrast step (SSTF) earns an explicit "this is a trade-off" line — the arrows
+  // above already point in opposite directions; this names why.
+  const tradeoff = isContrast && p
+    ? `<p class="tut-tradeoff">A real trade-off, not a free win: weigh the average against the worst case above, then watch where the two strategies actually diverge.</p>`
+    : '';
+  const watchBtn = prevStep
+    ? `<button class="ghost tut-compare" type="button">▶ ${isContrast ? 'Watch the trade-off' : 'Watch before / after'}</button>`
+    : '';
+  const nextBtn = cleared ? `<button class="primary tut-next" type="button">${isLast ? 'Finish ✓' : 'Next step →'}</button>` : '';
   el.innerHTML = `
     <div class="results tut-results">
       <div class="tut-runline ${m.deliveredAll ? 'ok' : 'bad'}">Delivered ${m.delivered} / ${m.total}${
@@ -288,7 +307,10 @@ export function renderTutorialResult(el, { metrics, analysis, cleared, prevStep,
         ${compareRows}
       </table>
       <p class="feedback">${escape(analysis ? analysis.feedback : '')}</p>
-      ${forward}
+      ${tradeoff}
+      ${cleared ? `<div class="tut-cleared">✓ You’ve applied the idea${isLast ? ' — and that’s the whole track. Nicely done.' : '.'}</div>` : ''}
+      <div class="tut-actions">${watchBtn}${nextBtn}</div>
+      ${cleared ? '' : `<p class="tut-not-cleared">Not there yet — apply the change described on the left and run again. (Stuck? “Show me the change” reveals one way to do it.)</p>`}
     </div>`;
 }
 

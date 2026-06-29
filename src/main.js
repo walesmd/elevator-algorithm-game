@@ -16,7 +16,7 @@ import { createRadio } from './audio/engine.js';
 import { isUnlocked } from './game/progression.js';
 import { renderBrief, renderResults, renderComparison, renderHints, renderSeedSwitcher, renderTutorialStep, renderTutorialResult } from './game/ui.js';
 import { analyze } from './game/analyzer.js';
-import { getTutorial, tutorialScenario, startCodeForStep, stepCleared, stepMetrics, tutorialPar } from './game/tutorial.js';
+import { getTutorial, tutorialScenario, startCodeForStep, stepCleared, stepMetrics, stepFrames, tutorialPar } from './game/tutorial.js';
 import { createRenderer } from './render/renderer.js';
 import { createPlayer } from './render/playback.js';
 import { createSyncPlayer } from './render/syncplayer.js';
@@ -49,7 +49,7 @@ let cmpSpeed = 1;
 // elevator algorithm one idea at a time. While `active`, the editor/stage/run path are
 // reused but driven against the fixed tutorial scenario instead of the current level.
 const TUTORIAL = getTutorial();
-const tut = { active: false, index: 0, revealed: false };
+const tut = { active: false, index: 0, revealed: false, lastRun: null };
 
 async function run() {
   if (running) return; // ignore re-entry while a run is in flight
@@ -403,13 +403,18 @@ async function compareAB() {
   }
 }
 
-function setupCompare(level, seed, A, B) {
+// opts lets a caller (the tutorial's before/after) override the labels, the sub-line, and
+// the section heading; the curriculum A/B compare passes none and keeps its defaults.
+function setupCompare(level, seed, A, B, opts = {}) {
   if (cmp.player) cmp.player.destroy();
   cmp.rA = createRenderer(els.cmpStageA, level); // canvases are visible now, so they size correctly
   cmp.rB = createRenderer(els.cmpStageB, level);
-  setCompareLabel(els.cmpLabelA, A.label);
-  setCompareLabel(els.cmpLabelB, B.label);
-  els.compareSub.textContent = `${level.name.split('—')[0].trim()} · seed ${seed} · ${A.label} vs ${B.label} (both on the same traffic)`;
+  setCompareLabel(els.cmpLabelA, opts.labelA || A.label);
+  setCompareLabel(els.cmpLabelB, opts.labelB || B.label);
+  els.compareHeading.textContent = opts.heading || 'A / B compare';
+  const levelLabel = (level.name || 'Tutorial').split('—')[0].trim();
+  els.compareSub.textContent =
+    opts.subText || `${levelLabel} · seed ${seed} · ${A.label} vs ${B.label} (both on the same traffic)`;
 
   cmp.player = createSyncPlayer(
     [{ frames: A.frames, renderer: cmp.rA }, { frames: B.frames, renderer: cmp.rB }],
@@ -661,6 +666,8 @@ function exitTutorial() {
 function loadTutorialStep(index) {
   tut.index = clampStep(index);
   tut.revealed = false;
+  tut.lastRun = null; // a new step has no run to compare yet
+  closeCompare(); // any before/after view belonged to the previous step
   const step = TUTORIAL.steps[tut.index];
   setSetting('tutorialProgress', Math.max(getSetting('tutorialProgress', 0), tut.index));
   renderTutorialStep(els.brief, { step, index: tut.index, total: TUTORIAL.steps.length, revealed: tut.revealed });
@@ -721,6 +728,8 @@ async function runTutorialStep() {
     // Clearing a step unlocks the next as resume progress.
     if (cleared) setSetting('tutorialProgress', Math.max(getSetting('tutorialProgress', 0), Math.min(tut.index + 1, last)));
     const prevStep = tut.index > 0 ? TUTORIAL.steps[tut.index - 1] : null;
+    // Stash this run so the before/after view can replay it as the "after" track.
+    tut.lastRun = { stepIndex: tut.index, frames: res.frames || [], metrics };
     renderTutorialResult(els.results, {
       metrics,
       analysis,
@@ -728,6 +737,7 @@ async function runTutorialStep() {
       prevStep,
       prevMetrics: prevStep ? stepMetrics(prevStep) : null,
       isLast: tut.index === last,
+      isContrast: step.kind === 'contrast',
     });
     if (res.frames && res.frames.length) {
       vizSource = null; // no seed switcher / per-seed table in the tutorial
@@ -742,6 +752,29 @@ async function runTutorialStep() {
   } finally {
     setRunning(false);
   }
+}
+
+// The before/after view (Phase 11C): replay THIS step's actual run beside the PREVIOUS
+// step's reference run, on the same scenario + seed, via the A/B compare machinery —
+// `findMoments` curates where the two diverge. For the contrast step that's SSTF vs LOOK:
+// the trade-off (a left-behind rider, a thrashing car) shows up as notable moments.
+function tutorialBeforeAfter() {
+  if (!tut.active || running) return;
+  const lr = tut.lastRun;
+  if (!lr || !lr.frames.length || lr.stepIndex <= 0) return;
+  const step = TUTORIAL.steps[lr.stepIndex];
+  const prevStep = TUTORIAL.steps[lr.stepIndex - 1];
+  const seed = tutorialScenario.seed;
+  const A = { frames: stepFrames(prevStep), metrics: stepMetrics(prevStep), label: prevStep.id.toUpperCase() }; // before
+  const B = { frames: lr.frames, metrics: lr.metrics, label: step.id.toUpperCase() }; // after (the learner's run)
+  els.compareView.hidden = false;
+  setupCompare(tutorialScenario, seed, A, B, {
+    heading: 'Before / after',
+    labelA: `Previous · ${A.label}`,
+    labelB: `This step · ${B.label}`,
+    subText: `${A.label} → ${B.label} · same traffic, same seed — the few moments where the change actually shows`,
+  });
+  revealInView(els.compareView, 'start');
 }
 
 let toastTimer = null;
@@ -787,6 +820,7 @@ function bindControls() {
   els.results.addEventListener('click', (e) => {
     if (tut.active) {
       if (e.target.closest('.tut-next')) advanceTutorial(); // success-gated "next step"
+      else if (e.target.closest('.tut-compare')) tutorialBeforeAfter(); // before/after replay
       return;
     }
     const row = e.target.closest('tr.watchable');
@@ -948,6 +982,7 @@ function init() {
     cmpB: document.getElementById('cmp-b'),
     compareAbBtn: document.getElementById('compare-ab'),
     compareView: document.getElementById('compare-view'),
+    compareHeading: document.getElementById('compare-heading'),
     compareSub: document.getElementById('compare-sub'),
     compareClose: document.getElementById('compare-close'),
     cmpLabelA: document.getElementById('cmp-label-a'),

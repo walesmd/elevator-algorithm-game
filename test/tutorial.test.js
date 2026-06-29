@@ -5,11 +5,12 @@
 // at LOOK-level performance, and the step-clear check behaves (must deliver; build steps
 // must reach the idea; the contrast step only needs to deliver).
 
-import { tutorial, tutorialScenario, getTutorial, startCodeForStep, goalComposite, stepCleared, stepMetrics, tutorialPar } from '../src/game/tutorial.js';
+import { tutorial, tutorialScenario, getTutorial, startCodeForStep, goalComposite, stepCleared, stepMetrics, tutorialPar, stepFrames } from '../src/game/tutorial.js';
 import { runSimulation } from '../src/engine/simulation.js';
 import { compositeOf } from '../src/game/scoring.js';
 import { compileController } from '../src/sandbox/compile.js';
 import { analyze } from '../src/game/analyzer.js';
+import { findMoments } from '../src/game/compare.js';
 
 let passed = 0;
 let failed = 0;
@@ -121,6 +122,37 @@ const run = (code) => runSimulation(tutorialScenario, tutorialScenario.seed, com
   const recLook = runSimulation(tutorialScenario, tutorialScenario.seed, compileController(look.code), { record: true });
   const aLook = analyze({ frames: recLook.frames, metrics: recLook.metrics, par, level: tutorialScenario });
   assert(!aLook.findings.some((f) => f.id === 'highWait'), 'at LOOK the analyzer no longer flags high wait (it IS par)');
+}
+
+// --- 8. stepFrames + the before/after view has notable moments to show (Phase 11C) ---
+{
+  const fcfs = tutorial.steps[0];
+  const scan = tutorial.steps.find((s) => s.id === 'scan');
+  const look = tutorial.steps.find((s) => s.id === 'look');
+  const sstf = tutorial.steps.find((s) => s.id === 'sstf');
+
+  const fr = stepFrames(fcfs);
+  assert(Array.isArray(fr) && fr.length > 0, 'stepFrames returns recorded frames');
+  assert(stepFrames(fcfs) === stepFrames(fcfs), 'stepFrames is cached (same array back)');
+  assert(fr[fr.length - 1].delivered === fr[fr.length - 1].total, 'the recorded run delivers everyone by the end');
+
+  // The build before/after (FCFS → SCAN) must surface at least one notable moment, or the
+  // visual before/after would just say "these run identically" — defeating the point.
+  const buildMoments = findMoments(
+    { frames: stepFrames(fcfs), metrics: stepMetrics(fcfs), label: 'FCFS' },
+    { frames: stepFrames(scan), metrics: stepMetrics(scan), label: 'SCAN' },
+    tutorialScenario
+  );
+  assert(buildMoments.length > 0, `FCFS→SCAN before/after surfaces notable moment(s) (${buildMoments.map((m) => m.kind).join(',') || 'none'})`);
+
+  // The SSTF contrast vs LOOK is the whole point of the contrast step — it must show the
+  // trade-off (a fairness "left behind" and/or a thrash moment), not run clean.
+  const contrastMoments = findMoments(
+    { frames: stepFrames(look), metrics: stepMetrics(look), label: 'LOOK' },
+    { frames: stepFrames(sstf), metrics: stepMetrics(sstf), label: 'SSTF' },
+    tutorialScenario
+  );
+  assert(contrastMoments.length > 0, `SSTF↔LOOK contrast surfaces notable moment(s) (${contrastMoments.map((m) => m.kind).join(',') || 'none'})`);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
