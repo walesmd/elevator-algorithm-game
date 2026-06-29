@@ -258,6 +258,44 @@
       .onboarding-steps .txt b { color:var(--ink); }
       .onboarding-actions { display:flex; justify-content:flex-end; }
 
+      /* --- Phase 11B: guided tutorial (opt-in walkthrough) --- */
+      .header-actions { flex:0 0 auto; align-self:center; display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+      #start-tutorial.active { border-color:var(--accent); color:var(--accent); }
+      /* The level bar is display:flex, which would beat the UA [hidden] rule — make
+         hiding it (in tutorial mode) actually take. */
+      #level-bar[hidden] { display:none; }
+      .onboarding-tut { margin:0; padding-top:12px; border-top:1px solid var(--line); }
+      .tut-card { }
+      .tut-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+      .tut-kicker { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--accent); font-weight:700; }
+      .tut-exit { padding:4px 10px; font-size:12px; }
+      .tut-progress { display:flex; align-items:center; gap:10px; margin:10px 0 6px; }
+      .tut-stepn { font-size:12px; color:var(--muted); }
+      .tut-dots { display:inline-flex; gap:6px; }
+      .tut-dot { width:9px; height:9px; border-radius:50%; background:var(--line); display:inline-block; }
+      .tut-dot.done { background:var(--accent); opacity:.55; }
+      .tut-dot.current { background:var(--accent); box-shadow:0 0 0 3px rgba(76,194,255,.18); }
+      .tut-title { margin:4px 0 6px; }
+      .tut-concept { margin:0 0 8px; font-size:12.5px; color:var(--muted); }
+      .tut-intro { margin:0 0 12px; }
+      .tut-task { background:#10242e; border-left:3px solid var(--accent); border-radius:4px; padding:9px 12px; margin:0 0 12px; }
+      .tut-task b { display:block; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--accent); margin-bottom:3px; }
+      .tut-task p { margin:0; font-size:13.5px; }
+      .tut-reveal { font-size:12.5px; }
+      .tut-reveal:disabled { opacity:.6; cursor:default; }
+      /* Post-run card */
+      .tut-runline { font-size:13px; font-weight:600; margin-bottom:8px; }
+      .tut-runline.ok { color:#7fd6a8; }
+      .tut-runline.bad { color:#ffb4a8; }
+      table.tut-metrics { margin:6px 0 12px; }
+      table.tut-metrics th { text-align:right; }
+      table.tut-metrics th:first-child, table.tut-metrics td:first-child { text-align:left; }
+      table.tut-metrics td { text-align:right; }
+      table.tut-metrics tr.tut-prev td { color:var(--muted); }
+      .tut-cleared { color:#7fd6a8; font-weight:600; font-size:13.5px; margin:10px 0 8px; }
+      .tut-not-cleared { color:var(--muted); font-size:13px; margin:10px 0 0; }
+      .tut-next { margin-top:2px; }
+
       /* --- Phase 9: floating procedural-radio widget --- */
       .radio { position:fixed; right:16px; bottom:16px; z-index:40; display:flex; align-items:center; gap:8px;
                background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:6px 10px 6px 6px;
@@ -283,7 +321,10 @@
         <h1>Elevator Algorithm Game</h1>
         <p>Write the brain that runs the elevator. Run it, read the feedback, make riders wait less.</p>
       </div>
-      <button id="how-it-works" class="ghost how-btn" type="button">How it works</button>
+      <div class="header-actions">
+        <button id="start-tutorial" class="ghost how-btn" type="button">Guided tutorial</button>
+        <button id="how-it-works" class="ghost how-btn" type="button">How it works</button>
+      </div>
     </header>
 
     <div id="onboarding" class="onboarding" hidden role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
@@ -296,6 +337,7 @@
           <li><span class="num">3</span><span class="txt"><b>Watch your elevators</b> drive the building, then read the feedback — it names the one thing most worth improving.</span></li>
           <li><span class="num">4</span><span class="txt"><b>Stuck?</b> Reveal a tiered hint, or open the spoiler gallery to watch and compare the classic strategies.</span></li>
         </ol>
+        <p class="lead onboarding-tut">Brand new to this? Take the <b>Guided tutorial</b> (top-right): it builds the elevator algorithm with you, one idea at a time.</p>
         <div class="onboarding-actions">
           <button id="onboarding-go" class="primary" type="button">Let’s go</button>
         </div>

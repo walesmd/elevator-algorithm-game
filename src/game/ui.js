@@ -217,6 +217,81 @@ export function renderComparison(el, rows) {
     <p class="hint">Lower is better for wait, journey, and distance; the column winner is marked <span class="cmp-mark">✓</span>. Rows that didn't deliver everyone are dimmed and don't count. Click <b>Watch</b> to replay any one above.</p>`;
 }
 
+// --- Phase 11B: the guided tutorial (opt-in, sanctioned walkthrough) ---------------
+//
+// Two render passes, mirroring the curriculum's brief/results split:
+//   renderTutorialStep   — the lesson card (in the brief column): which step, the named
+//                          concept, the idea, the one scoped change, and the gated
+//                          "show me the change" reveal. Stable across runs.
+//   renderTutorialResult — after a run (in the results column): what your run actually
+//                          did vs the previous step, the analyzer's diagnosis of THIS
+//                          run, and the success-gated "next step". Re-rendered each run.
+// main.js owns the state + wires the (delegated) button clicks.
+
+// The lesson card. `revealed` disables the spoiler reveal once it's been used.
+export function renderTutorialStep(el, { step, index, total, revealed = false }) {
+  const n = index + 1;
+  const dots = Array.from({ length: total }, (_, i) => {
+    const cls = i < index ? ' done' : i === index ? ' current' : '';
+    return `<span class="tut-dot${cls}"></span>`;
+  }).join('');
+  // The first step IS the naive baseline — there's nothing to change, just run it — so
+  // the reveal would be a no-op there; offer it only from step 2 on.
+  const canReveal = index > 0;
+  const revealBtn = !canReveal
+    ? ''
+    : revealed
+    ? `<button class="ghost tut-reveal" type="button" disabled>Change revealed — read it, then Run</button>`
+    : `<button class="ghost tut-reveal" type="button">Show me the change <span class="spoiler-tag">spoiler</span></button>`;
+  el.innerHTML = `
+    <div class="tut-card">
+      <div class="tut-head">
+        <span class="tut-kicker">Guided tutorial${step.kind === 'contrast' ? ' · a contrast' : ''}</span>
+        <button class="ghost tut-exit" type="button">Exit ✕</button>
+      </div>
+      <div class="tut-progress">
+        <span class="tut-stepn" role="status">Step ${n} of ${total}</span>
+        <span class="tut-dots" aria-hidden="true">${dots}</span>
+      </div>
+      <h2 class="tut-title">${escape(step.title)}</h2>
+      <p class="tut-concept"><span class="concept-tag">The concept</span> ${escape(step.concept)}</p>
+      <p class="tut-intro">${escape(step.intro)}</p>
+      <div class="tut-task"><b>Your task</b><p>${escape(step.task)}</p></div>
+      ${revealBtn}
+    </div>`;
+}
+
+// The post-run card. `prevStep`/`prevMetrics` give the before/after reference (null on
+// the first step). `analysis` is the analyzer's verdict on THIS run; `cleared` gates the
+// "next step" button (and on the last step it becomes "finish").
+export function renderTutorialResult(el, { metrics, analysis, cleared, prevStep, prevMetrics, isLast }) {
+  if (!metrics) {
+    el.innerHTML = '';
+    return;
+  }
+  const m = metrics;
+  const compareRows = prevStep && prevMetrics
+    ? `<tr><td>This step</td><td>${fmt(m.avgWait)}</td><td>${fmt(m.maxWait)}</td><td>${fmt(m.distance)}</td></tr>
+       <tr class="tut-prev"><td>Previous (${escape(prevStep.id.toUpperCase())})</td><td>${fmt(prevMetrics.avgWait)}</td><td>${fmt(prevMetrics.maxWait)}</td><td>${fmt(prevMetrics.distance)}</td></tr>`
+    : `<tr><td>This step</td><td>${fmt(m.avgWait)}</td><td>${fmt(m.maxWait)}</td><td>${fmt(m.distance)}</td></tr>`;
+  const forward = cleared
+    ? `<div class="tut-cleared">✓ You’ve applied the idea${isLast ? ' — and that’s the whole track. Nicely done.' : '.'}</div>
+       <button class="primary tut-next" type="button">${isLast ? 'Finish ✓' : 'Next step →'}</button>`
+    : `<p class="tut-not-cleared">Not there yet — apply the change described on the left and run again. (Stuck? “Show me the change” reveals one way to do it.)</p>`;
+  el.innerHTML = `
+    <div class="results tut-results">
+      <div class="tut-runline ${m.deliveredAll ? 'ok' : 'bad'}">Delivered ${m.delivered} / ${m.total}${
+        m.deliveredAll ? ' ✓' : ' — someone never arrived'
+      }</div>
+      <table class="metrics tut-metrics">
+        <tr><th></th><th>Avg wait</th><th>Max wait</th><th>Distance</th></tr>
+        ${compareRows}
+      </table>
+      <p class="feedback">${escape(analysis ? analysis.feedback : '')}</p>
+      ${forward}
+    </div>`;
+}
+
 function row(label, you, par) {
   return `<tr><td>${label}</td><td>${fmt(you)}</td><td>${fmt(par)}</td></tr>`;
 }
