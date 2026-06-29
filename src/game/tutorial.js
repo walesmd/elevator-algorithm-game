@@ -223,6 +223,18 @@ export function goalComposite(step) {
   return compositeOf(stepMetrics(step), tutorial.scenario.weights);
 }
 
+// Replay frames for a step's TARGET code on the fixed scenario (cached). Recorded lazily
+// — only the before/after view needs them — and used as the "before" track when a step
+// is replayed beside the previous one. Same scenario + seed as stepMetrics, so the
+// "before" picture matches the "before" numbers exactly.
+const framesCache = new Map();
+export function stepFrames(step) {
+  if (framesCache.has(step.id)) return framesCache.get(step.id);
+  const frames = runSimulation(tutorial.scenario, tutorial.scenario.seed, compileController(step.code), { record: true }).frames;
+  framesCache.set(step.id, frames);
+  return frames;
+}
+
 // Par for the run diagnosis: the end-state (LOOK) metrics, shaped as the curriculum
 // analyzer expects ({ look }). Reusing par=LOOK across every step means the diagnosis
 // always measures the gap to the strong algorithm — big at FCFS, shrinking each step,
