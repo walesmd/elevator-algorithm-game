@@ -766,12 +766,96 @@ fixed scenario; each step diagnoses the prior run's problem (via the analyzer), 
 one scoped change (revealable on request), and shows a measurable improvement; tutorial
 progress persists; the curriculum and its struggle-first default are untouched.
 
-**Phase 12 — More tutorial tracks.** Once the framework exists, add tracks for the later
-ideas on the same rails: **multi-car dispatch** (one car → several cars that bunch →
-assign calls so they cover the building) and the **zoned skyscraper / sky-lobby
-transfer**. Optional, additive, and a natural home for the bring-your-own-key generative
-prose (richer plain-English step explanations) noted under Phase 7 — additive only,
-never required.
+**Phase 12 — More tutorial tracks (on the same rails).** Phase 11 shipped the framework
+and the first track (single-car FCFS → LOOK). Phase 12 generalizes that framework from a
+single hardcoded track to a small **registry of tracks**, then adds two more tracks built
+on the exact same rails — the lesson card, the sandboxed Run → diagnose, the before/after
+view, the delta arrows. Each new track is the guided, opt-in sibling of a curriculum arc
+(L7–L9 group control; L10–L11 zoning), teaches **one idea per step on one fixed scenario**,
+and ships every step as verified reference code that measurably beats the previous one.
+
+*Reconciling with the doctrine.* Identical to Phase 11: each track is the **opt-in,
+sanctioned** exception to the struggle-first default. You choose to enter it and you choose
+a track; struggle is preserved inside each step (the step states the idea and asks you to
+make the change; the exact change is revealed only on a "show me" request); the curriculum
+is untouched; and the game stays fully functional offline with zero keys.
+
+*Framework generalization (12A's first job).* Phase 11 hardcoded one `tutorial` and one
+`tutorialScenario`. Generalize without changing the UI's shape:
+- `tutorial.js` becomes a small ordered **`tutorialTracks` registry** — each track is
+  `{ id, title, blurb, scenario, steps }`, and the single-car track is simply the first
+  entry. The already step-based helpers (`startCodeForStep`, `stepMetrics`, `stepFrames`,
+  `stepCleared`) become track/scenario-parameterized; `goalComposite(step, scenario)` and
+  `par(track)` take the track; the metrics/frames caches key on `track.id + step.id`.
+- `main.js` threads the active track through `tut.trackId` (resolving its scenario / steps
+  / par); persistence becomes **per-track** — `tutorialProgress:<trackId>` and
+  `tutorialCode:<trackId>:<stepId>` (no change to `progress.js`, only the key names). The
+  run / reveal / reset / advance / before-after handlers take the active track.
+- The two render functions (`renderTutorialStep`, `renderTutorialResult`) are **already
+  track-agnostic** — no change. The whole 11B/C experience (diagnose, before/after, delta
+  arrows) works unchanged for any track.
+- Entry point: the `#start-tutorial` button opens a small **track picker** — a card
+  listing each track's title, one-line blurb, and its own progress dots. Tracks are
+  ordered but never hard-gated (all opt-in); picking one enters it and resumes that track's
+  own progress. The onboarding mention updates to "pick a track."
+
+*The multi-car dispatch track (12A).* One fixed multi-car scenario (≈3 cars, a mid-rise
+building, distance weighted enough that overlap is legible — tuned in code so the ladder is
+monotonic). Each step is one idea, its target derived from the existing N-car references
+(`src/reference/fcfs.js`, `look.js`) so every target is real, verified code:
+1. **Run your single-car algorithm on every car.** Apply LOOK to each car independently,
+   every car seeing every hall call. They **bunch** — all chase the same calls and travel
+   as a pack, so most of the fleet is wasted. (The hook: the previous track's winner fails
+   the moment there is more than one car.)
+2. **Claim each call for one car.** Assign each hall call to a single car (nearest-car
+   ownership) so two cars never target the same call. The work divides — but a call can
+   still go to a car heading away from it.
+3. **Dispatch to the best-placed car.** Assign by a directional cost (prefer the car
+   already sweeping that way and about to pass the call), not just the nearest. The cars
+   specialize into regions and stop overlapping — the strong group-LOOK end state.
+   (An optional contrast step — e.g. one global direction for all cars vs. per-car
+   dispatch — can reuse the 11C contrast machinery.)
+
+*The zoned skyscraper / sky-lobby track (12B).* One fixed zoned scenario (two bands, four
+cars — two per band — meeting at a sky-lobby, à la L11). The engine already (a) clamps a
+car to its `[minFloor, maxFloor]` band (an out-of-range move is simply ignored) and (b)
+hands a cross-zone rider off **automatically**: on boarding, the rider's `legTarget` is
+clamped into the car's band, and dropping them at that band edge (the sky-lobby) re-posts
+them as a fresh hall call for the next band's car. So the controller's only real job is to
+**respect the bands in dispatch** — transfers then happen for free. Steps:
+1. **Ignore the bands.** Run full-building dispatch (the multi-car track's end state, but
+   blind to bands). Calls get assigned to cars that cannot reach them; the engine refuses
+   the out-of-range moves and those riders are **stranded** (never delivered). The hook: a
+   car physically cannot leave its band.
+2. **Respect each car's range.** Add the band check to dispatch (only assign a call to a
+   car whose band covers it). Same-band riders are served, and **cross-band riders transfer
+   automatically at the sky-lobby** — everyone arrives. (Name the concept: the sky-lobby
+   transfer.)
+3. **Split each band between its two cars.** Within a band, dispatch the calls between the
+   two cars (the multi-car lesson, scoped to a zone) so the pair does not bunch — lower
+   waits, the "zoning and dispatch together" end state (the L11 idea).
+
+*Architecture (reuse, don't reinvent).*
+- Same **content-is-data** model, now a `tutorialTracks` registry; each step still carries
+  its intro, named concept, starting code, scoped task, revealable target, and success
+  check.
+- Each track runs on **one fixed scenario + seed**; every step's target compiles and
+  delivers, and each build step measurably beats the previous on that scenario — verified
+  by tests, exactly as 11A. The one nuance: the zoned track's naive step is *meant* to
+  strand riders, so its check is "the next step delivers everyone the naive step stranded."
+- The entire 11B/C UI is reused unchanged; the only genuinely new UI is the track picker.
+
+*Staged delivery:* 12A — framework generalization (track registry + track picker + per-
+track progress) **and** the multi-car dispatch track (data + verified steps + tests; it
+Just Works in the existing UI); 12B — the zoned / sky-lobby track (data + verified steps +
+tests).
+
+*DoD (Phase 12):* the tutorial framework supports multiple opt-in tracks (pick a track from
+the entry point; each resumes its own progress); a **multi-car dispatch** track and a
+**zoned / sky-lobby** track each walk a learner one idea at a time on a fixed scenario,
+every build step verified to beat the previous and end at the strong algorithm, reusing the
+diagnose / before-after / delta-arrow UI from 11B/C; the curriculum, determinism, and the
+offline-zero-key core are untouched.
 
 ---
 
