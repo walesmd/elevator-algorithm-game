@@ -205,15 +205,31 @@ export function startCodeForStep(index) {
   return index <= 0 ? tutorial.steps[0].code : tutorial.steps[index - 1].code;
 }
 
-// Composite of a step's target code on the fixed scenario (cached). The "bar" a build
-// step's run must reach to count as cleared.
-const goalCache = new Map();
-export function goalComposite(step) {
-  if (goalCache.has(step.id)) return goalCache.get(step.id);
+// Metrics of a step's TARGET code on the fixed scenario (cached). The single source for
+// (a) the step's "bar" — its composite — and (b) the before/after reference the UI shows
+// ("the previous step got this"). Trusted reference code, so it runs on the main thread;
+// the LEARNER's edited code, by contrast, must go through the sandboxed Worker.
+const metricsCache = new Map();
+export function stepMetrics(step) {
+  if (metricsCache.has(step.id)) return metricsCache.get(step.id);
   const m = runSimulation(tutorial.scenario, tutorial.scenario.seed, compileController(step.code)).metrics;
-  const c = compositeOf(m, tutorial.scenario.weights);
-  goalCache.set(step.id, c);
-  return c;
+  metricsCache.set(step.id, m);
+  return m;
+}
+
+// Composite of a step's target code on the fixed scenario. The "bar" a build step's run
+// must reach to count as cleared.
+export function goalComposite(step) {
+  return compositeOf(stepMetrics(step), tutorial.scenario.weights);
+}
+
+// Par for the run diagnosis: the end-state (LOOK) metrics, shaped as the curriculum
+// analyzer expects ({ look }). Reusing par=LOOK across every step means the diagnosis
+// always measures the gap to the strong algorithm — big at FCFS, shrinking each step,
+// quiet once you reach LOOK — which both shows the naive baseline failing and motivates
+// the next idea, exactly like the curriculum's feedback.
+export function tutorialPar() {
+  return { look: stepMetrics(tutorial.steps.find((s) => s.id === 'look')) };
 }
 
 // Did this run clear the step? Must deliver everyone; a build step must also reach

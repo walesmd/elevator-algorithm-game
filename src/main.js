@@ -14,8 +14,9 @@ import { runSimulation } from './engine/simulation.js';
 import { saveResult, getBest, saveCode, loadCode, saveLastLevel, loadLastLevel, getFlag, setFlag, getSetting, setSetting } from './game/progress.js';
 import { createRadio } from './audio/engine.js';
 import { isUnlocked } from './game/progression.js';
-import { renderBrief, renderResults, renderComparison, renderHints, renderSeedSwitcher } from './game/ui.js';
+import { renderBrief, renderResults, renderComparison, renderHints, renderSeedSwitcher, renderTutorialStep, renderTutorialResult } from './game/ui.js';
 import { analyze } from './game/analyzer.js';
+import { getTutorial, tutorialScenario, startCodeForStep, stepCleared, stepMetrics, tutorialPar } from './game/tutorial.js';
 import { createRenderer } from './render/renderer.js';
 import { createPlayer } from './render/playback.js';
 import { createSyncPlayer } from './render/syncplayer.js';
@@ -44,9 +45,15 @@ let lastRunCode = null; // the code from the most recent scored run (for seed re
 // A/B compare (Phase 7B): two renderers driven by one synced player.
 const cmp = { rA: null, rB: null, player: null };
 let cmpSpeed = 1;
+// Guided tutorial (Phase 11B): the opt-in, sanctioned walkthrough that derives the
+// elevator algorithm one idea at a time. While `active`, the editor/stage/run path are
+// reused but driven against the fixed tutorial scenario instead of the current level.
+const TUTORIAL = getTutorial();
+const tut = { active: false, index: 0, revealed: false };
 
 async function run() {
   if (running) return; // ignore re-entry while a run is in flight
+  if (tut.active) return runTutorialStep();
   const level = currentLevel; // the run belongs to THIS level; the worker is async
   const code = editor.getValue();
   saveCode(level.id, code);
@@ -100,6 +107,7 @@ function setRunning(on) {
   running = on;
   els.runBtn.disabled = on;
   els.runBtn.textContent = on ? 'Running…' : 'Run';
+  els.startTutorial.disabled = on; // don't let the mode toggle race an in-flight run
   // Freeze the gallery while a sandboxed run is in flight, so a Watch/Compare can't
   // clobber the replay/HUD that the pending run is about to populate.
   els.compareBtn.disabled = on;
@@ -609,6 +617,133 @@ function dismissOnboarding() {
   setFlag('onboarded', true); // don't auto-show again
 }
 
+// --- Guided tutorial: an opt-in, step-by-step walk from FCFS to LOOK (Phase 11B) ---
+//
+// The sanctioned counterpart to the struggle-first curriculum (see CLAUDE.md + the
+// Phase 11 note). It reuses the editor, the sandboxed run path, the Canvas replay, and
+// the run analyzer — but swaps the brief for a lesson card, runs against ONE fixed
+// scenario, diagnoses the real run, and gates "next" on actually applying the idea. The
+// exact change is only ever shown on an explicit "show me" (the spoiler reveal).
+
+const tutStepKey = (i) => `tutorialCode:${TUTORIAL.steps[i].id}`;
+const clampStep = (i) => Math.max(0, Math.min(TUTORIAL.steps.length - 1, i | 0));
+
+function enterTutorial() {
+  if (tut.active || running) return;
+  tut.active = true;
+  closeCompare();
+  els.levelBar.hidden = true; // the curriculum's level picker isn't part of the walkthrough
+  els.gallery.hidden = true; // nor the spoiler gallery
+  els.hints.innerHTML = ''; // the tutorial provides its own guidance
+  els.startTutorial.textContent = 'Exit tutorial';
+  els.startTutorial.classList.add('active');
+  els.resetBtn.textContent = 'Reset step';
+  // A renderer sized for the tutorial's geometry (12 floors, one car).
+  viz.renderer = createRenderer(els.canvas, tutorialScenario);
+  loadTutorialStep(clampStep(getSetting('tutorialProgress', 0)));
+  revealInView(els.brief, 'start');
+}
+
+function exitTutorial() {
+  if (!tut.active) return;
+  tut.active = false;
+  els.levelBar.hidden = false;
+  els.startTutorial.textContent = 'Guided tutorial';
+  els.startTutorial.classList.remove('active');
+  els.resetBtn.textContent = 'Reset to starter';
+  // Rebuild the normal brief / hints / editor / stage / gallery for the current level.
+  selectLevel(currentLevel);
+}
+
+// Show a step: its lesson card, the editor seeded with the learner's saved work for this
+// step (or the previous step's solution), and a clean stage. Reaching a step records it
+// as progress, so re-entering the tutorial later resumes here.
+function loadTutorialStep(index) {
+  tut.index = clampStep(index);
+  tut.revealed = false;
+  const step = TUTORIAL.steps[tut.index];
+  setSetting('tutorialProgress', Math.max(getSetting('tutorialProgress', 0), tut.index));
+  renderTutorialStep(els.brief, { step, index: tut.index, total: TUTORIAL.steps.length, revealed: tut.revealed });
+  const saved = getSetting(tutStepKey(tut.index), null);
+  editor.setValue(saved != null ? saved : startCodeForStep(tut.index));
+  els.results.innerHTML =
+    '<p class="hint">Press <b>Run</b> to watch this step’s algorithm drive the building, then read the diagnosis.</p>';
+  resetStage();
+}
+
+// Reveal the exact change for this step (the spoiler) — opt-in, per the doctrine. Drops
+// the step's target code into the editor; the learner still reads it and presses Run.
+function revealTutorialChange() {
+  if (!tut.active) return;
+  const step = TUTORIAL.steps[tut.index];
+  editor.setValue(step.code);
+  setSetting(tutStepKey(tut.index), step.code);
+  tut.revealed = true;
+  renderTutorialStep(els.brief, { step, index: tut.index, total: TUTORIAL.steps.length, revealed: true });
+  editor.focus();
+}
+
+function resetTutorialStep() {
+  const code = startCodeForStep(tut.index);
+  editor.setValue(code);
+  setSetting(tutStepKey(tut.index), code);
+  editor.focus();
+}
+
+function advanceTutorial() {
+  if (!tut.active) return;
+  const last = TUTORIAL.steps.length - 1;
+  if (tut.index >= last) {
+    exitTutorial();
+    showToast('🎓 Tutorial complete — now take what you built to the levels!');
+    return;
+  }
+  loadTutorialStep(tut.index + 1);
+  revealInView(els.brief, 'start');
+}
+
+// Run the current step's code in the sandbox (the editor holds untrusted, edited code),
+// diagnose the real run, gate "next" on it actually applying the idea, and replay it.
+async function runTutorialStep() {
+  if (running || !tut.active) return;
+  const step = TUTORIAL.steps[tut.index];
+  const code = editor.getValue();
+  setSetting(tutStepKey(tut.index), code);
+  const seed = tutorialScenario.seed;
+  setRunning(true);
+  try {
+    const res = await harness.score({ code, level: tutorialScenario, seeds: [seed], recordSeed: seed });
+    if (!tut.active) return; // exited mid-run
+    const metrics = res.perSeed[0].metrics;
+    const analysis = analyze({ frames: res.frames || [], metrics, par: tutorialPar(), level: tutorialScenario });
+    const cleared = stepCleared(step, metrics);
+    const last = TUTORIAL.steps.length - 1;
+    // Clearing a step unlocks the next as resume progress.
+    if (cleared) setSetting('tutorialProgress', Math.max(getSetting('tutorialProgress', 0), Math.min(tut.index + 1, last)));
+    const prevStep = tut.index > 0 ? TUTORIAL.steps[tut.index - 1] : null;
+    renderTutorialResult(els.results, {
+      metrics,
+      analysis,
+      cleared,
+      prevStep,
+      prevMetrics: prevStep ? stepMetrics(prevStep) : null,
+      isLast: tut.index === last,
+    });
+    if (res.frames && res.frames.length) {
+      vizSource = null; // no seed switcher / per-seed table in the tutorial
+      vizSeed = seed;
+      visualize(res.frames, seed, metrics.total);
+      els.hudSeed.textContent = `tutorial · ${step.id.toUpperCase()}`;
+    }
+  } catch (err) {
+    if (!tut.active) return;
+    renderResults(els.results, { error: messageOf(err), errorTitle: titleFor(err) });
+    resetStage();
+  } finally {
+    setRunning(false);
+  }
+}
+
 let toastTimer = null;
 function showToast(msg) {
   els.toast.textContent = msg;
@@ -619,6 +754,15 @@ function showToast(msg) {
 
 function bindControls() {
   els.runBtn.addEventListener('click', run);
+
+  // Guided tutorial (Phase 11B): the header button toggles the mode; the lesson card
+  // carries its own Exit and the spoiler reveal; "Next step" lives in the results card.
+  els.startTutorial.addEventListener('click', () => (tut.active ? exitTutorial() : enterTutorial()));
+  els.brief.addEventListener('click', (e) => {
+    if (!tut.active) return;
+    if (e.target.closest('.tut-exit')) exitTutorial();
+    else if (e.target.closest('.tut-reveal')) revealTutorialChange();
+  });
 
   // Onboarding: header button re-opens it; "Let's go" / Escape / backdrop dismiss it.
   els.howItWorks.addEventListener('click', showOnboarding);
@@ -641,6 +785,10 @@ function bindControls() {
     if (chip && !chip.disabled) visualizeSeed(Number(chip.dataset.seed));
   });
   els.results.addEventListener('click', (e) => {
+    if (tut.active) {
+      if (e.target.closest('.tut-next')) advanceTutorial(); // success-gated "next step"
+      return;
+    }
     const row = e.target.closest('tr.watchable');
     if (!row || !lastRunCode) return;
     vizSource = { type: 'player', code: lastRunCode }; // the breakdown is the player's run
@@ -649,6 +797,7 @@ function bindControls() {
   });
 
   els.resetBtn.addEventListener('click', () => {
+    if (tut.active) { resetTutorialStep(); return; } // reset to THIS step's starting code
     if (!safeToReplaceEditor()) return;
     const code = starterFor(currentLevel);
     editor.setValue(code);
@@ -819,6 +968,8 @@ function init() {
     onboarding: document.getElementById('onboarding'),
     onboardingGo: document.getElementById('onboarding-go'),
     howItWorks: document.getElementById('how-it-works'),
+    // Guided tutorial (Phase 11B)
+    startTutorial: document.getElementById('start-tutorial'),
     // Radio (Phase 9)
     radio: document.getElementById('radio'),
     radioMute: document.getElementById('radio-mute'),
@@ -830,10 +981,15 @@ function init() {
 
   harness = createHarness({ budgetMs: 4000 });
   // Autosave the editor per level on every edit, so switching levels or reloading
-  // never loses work (deliberate Insert/Reset are guarded separately).
+  // never loses work (deliberate Insert/Reset are guarded separately). In tutorial mode
+  // edits autosave per STEP instead, so the walkthrough's code never overwrites a level's
+  // saved work (and the learner's in-progress step code survives a reload).
   editor = createEditor(els.editorMount, {
     value: STARTER_CODE,
-    onChange: (code) => saveCode(currentLevel.id, code),
+    onChange: (code) => {
+      if (tut.active) setSetting(tutStepKey(tut.index), code);
+      else saveCode(currentLevel.id, code);
+    },
   });
 
   bindControls();

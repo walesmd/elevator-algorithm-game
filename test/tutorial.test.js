@@ -5,10 +5,11 @@
 // at LOOK-level performance, and the step-clear check behaves (must deliver; build steps
 // must reach the idea; the contrast step only needs to deliver).
 
-import { tutorial, tutorialScenario, getTutorial, startCodeForStep, goalComposite, stepCleared } from '../src/game/tutorial.js';
+import { tutorial, tutorialScenario, getTutorial, startCodeForStep, goalComposite, stepCleared, stepMetrics, tutorialPar } from '../src/game/tutorial.js';
 import { runSimulation } from '../src/engine/simulation.js';
 import { compositeOf } from '../src/game/scoring.js';
 import { compileController } from '../src/sandbox/compile.js';
+import { analyze } from '../src/game/analyzer.js';
 
 let passed = 0;
 let failed = 0;
@@ -89,6 +90,37 @@ const run = (code) => runSimulation(tutorialScenario, tutorialScenario.seed, com
 
   // goalComposite is the target's own composite.
   assert(Math.abs(goalComposite(look) - compositeOf(run(look.code), tutorialScenario.weights)) < 1e-9, 'goalComposite matches the target run');
+}
+
+// --- 6. stepMetrics + tutorialPar back the UI's before/after and par (Phase 11B) -----
+{
+  const fcfs = tutorial.steps[0];
+  const look = tutorial.steps.find((s) => s.id === 'look');
+  const mFcfs = stepMetrics(fcfs);
+  assert(mFcfs.deliveredAll && mFcfs.avgWait > 0, 'stepMetrics returns a delivered run with a real wait');
+  assert(stepMetrics(fcfs) === stepMetrics(fcfs), 'stepMetrics is cached (same object back)');
+  const par = tutorialPar();
+  assert(par.look && par.look.deliveredAll, 'tutorialPar exposes LOOK metrics that deliver everyone');
+  assert(par.look === stepMetrics(look), 'tutorialPar.look is LOOK’s step metrics');
+}
+
+// --- 7. The run diagnosis (reusing the analyzer) names FCFS's symptom, quiet at LOOK --
+{
+  const par = tutorialPar();
+  const fcfs = tutorial.steps[0];
+  const look = tutorial.steps.find((s) => s.id === 'look');
+
+  const recFcfs = runSimulation(tutorialScenario, tutorialScenario.seed, compileController(fcfs.code), { record: true });
+  const aFcfs = analyze({ frames: recFcfs.frames, metrics: recFcfs.metrics, par, level: tutorialScenario });
+  assert(typeof aFcfs.feedback === 'string' && aFcfs.feedback.length > 0, 'a FCFS run yields a feedback line');
+  assert(
+    aFcfs.findings.some((f) => f.id === 'highWait' || f.id === 'passedSameDir'),
+    'the analyzer flags FCFS’s high-wait / passed-by symptom (the lesson’s hook)'
+  );
+
+  const recLook = runSimulation(tutorialScenario, tutorialScenario.seed, compileController(look.code), { record: true });
+  const aLook = analyze({ frames: recLook.frames, metrics: recLook.metrics, par, level: tutorialScenario });
+  assert(!aLook.findings.some((f) => f.id === 'highWait'), 'at LOOK the analyzer no longer flags high wait (it IS par)');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
