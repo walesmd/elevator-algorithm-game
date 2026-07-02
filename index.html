@@ -482,5 +482,15 @@
     </div>
 
     <script type="module" src="./src/main.js"></script>
+
+    <!-- "Back to michaelwales.com" pill from the MW design system. Loaded from
+         michaelwales.com (same origin in production, where this game is served
+         under /elevator-algorithm-game/) rather than vendored: it's a decorative,
+         non-core navigation affordance, so it stays outside the offline/vendor
+         doctrine that governs gameplay. It degrades gracefully — if the script
+         can't load (e.g. offline), the <mw-return> element simply doesn't upgrade
+         and the game is unaffected. Do not re-vendor without cause. -->
+    <script src="https://michaelwales.com/return-chip.js" defer></script>
+    <mw-return></mw-return>
   </body>
 </html>
