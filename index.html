@@ -265,6 +265,14 @@
          hiding it (in tutorial mode) actually take. */
       #level-bar[hidden] { display:none; }
       .onboarding-tut { margin:0; padding-top:12px; border-top:1px solid var(--line); }
+      /* Track picker (Phase 12A) */
+      .track-list { display:grid; gap:10px; margin:4px 0 16px; }
+      .track-item { display:block; width:100%; text-align:left; background:#161d26; border:1px solid var(--line);
+                    border-radius:10px; padding:12px 14px; cursor:pointer; color:var(--ink); }
+      .track-item:hover, .track-item:focus-visible { border-color:var(--accent); outline:none; }
+      .track-item-title { display:block; font-weight:600; font-size:14px; }
+      .track-item-blurb { display:block; color:var(--muted); font-size:12.5px; margin-top:3px; }
+      .track-item-status { display:block; color:var(--accent); font-size:11px; margin-top:6px; text-transform:uppercase; letter-spacing:.05em; }
       .tut-card { }
       .tut-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
       .tut-kicker { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--accent); font-weight:700; }
@@ -344,9 +352,21 @@
           <li><span class="num">3</span><span class="txt"><b>Watch your elevators</b> drive the building, then read the feedback — it names the one thing most worth improving.</span></li>
           <li><span class="num">4</span><span class="txt"><b>Stuck?</b> Reveal a tiered hint, or open the spoiler gallery to watch and compare the classic strategies.</span></li>
         </ol>
-        <p class="lead onboarding-tut">Brand new to this? Take the <b>Guided tutorial</b> (top-right): it builds the elevator algorithm with you, one idea at a time.</p>
+        <p class="lead onboarding-tut">Brand new to this? Open a <b>Guided tutorial</b> (top-right) and pick a track — each builds an algorithm with you, one idea at a time.</p>
         <div class="onboarding-actions">
           <button id="onboarding-go" class="primary" type="button">Let’s go</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Guided-tutorial track picker (Phase 12A): choose which walkthrough to enter. -->
+    <div id="track-picker" class="onboarding" hidden role="dialog" aria-modal="true" aria-labelledby="track-picker-title">
+      <div class="onboarding-card">
+        <h2 id="track-picker-title">Guided tutorials</h2>
+        <p class="lead">Pick a track. Each one builds an algorithm with you, one idea at a time — opt-in, and separate from the levels.</p>
+        <div id="track-list" class="track-list"></div>
+        <div class="onboarding-actions">
+          <button id="track-picker-close" class="ghost" type="button">Close</button>
         </div>
       </div>
     </div>

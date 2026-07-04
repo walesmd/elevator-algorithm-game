@@ -188,68 +188,260 @@ export const tutorial = {
       intro: 'One more idea, for contrast: always go to the nearest pending stop. It often beats LOOK on AVERAGE wait — but it has no sense of direction.',
       problem: 'It can flip-flop (thrash) and leave a far-off rider waiting a long time (starvation). Lower average, worse worst-case — a real trade-off, not a free win.',
       task: 'Try the greedy version and compare its average wait AND its worst wait against LOOK.',
+      contrastNote: 'A real trade-off, not a free win: weigh the average against the worst case above, then watch where the two strategies actually diverge.',
       code: SSTF,
     },
   ],
 };
 
-// --- Tiny engine -----------------------------------------------------------------
+// === Track 2: from one car to a coordinated fleet (multi-car dispatch) =============
+//
+// The guided sibling of the curriculum's L7–L9 arc. One fixed 3-car scenario; distance is
+// weighted enough that overlapping, bunched cars cost you, so the dispatch win is legible.
+// The step code is derived from the N-car references (src/reference/fcfs.js, look.js).
 
+export const multiCarScenario = {
+  id: 'tutorial-multicar',
+  numFloors: 14,
+  numElevators: 3,
+  capacity: 6,
+  ticksPerFloor: 2,
+  doorTicks: 2,
+  timeLimit: 5000,
+  spawn: { type: 'uniform', count: 42, firstTick: 0, lastTick: 320 },
+  seed: 1,
+  weights: { wait: 1, journey: 0.5, distance: 0.3, undelivered: 1000 },
+};
+
+// All three steps share the SAME per-car LOOK brain (stepCar); they differ ONLY in which
+// hall calls each car is handed. That is the whole lesson: the driving never changes —
+// dispatch is purely about WHO answers WHICH call. (stepCar mirrors the N-car LOOK
+// reference, including the turnaround/opposite-call rule so no assigned rider is stranded.)
+const MC_STEP_CAR = `
+// One car's LOOK decision over the calls it was handed (drop-offs + assigned pick-ups).
+function stepCar(e, i, calls, dir) {
+  if (!e.ready) return { action: 'IDLE' };
+  const room = e.load < e.capacity;
+  const stops = new Set(e.carCalls);
+  if (room) for (const c of calls) stops.add(c.floor);
+  if (stops.size === 0) return { action: 'IDLE' };
+  const ahead = (d) => [...stops].some((f) => (d > 0 ? f > e.floor : f < e.floor));
+  const heading = dir[i] > 0 ? 'up' : 'down';
+  // Serve our committed direction here first (let riders off, board riders going our way).
+  if (e.carCalls.includes(e.floor) || (room && calls.some((c) => c.floor === e.floor && c.direction === heading)))
+    return { action: 'STOP', serving: heading };
+  // Keep going while there is work ahead; otherwise reverse toward the work behind us.
+  if (ahead(dir[i])) return { action: dir[i] > 0 ? 'MOVE_UP' : 'MOVE_DOWN' };
+  if (ahead(-dir[i])) {
+    dir[i] = -dir[i];
+    const nh = dir[i] > 0 ? 'up' : 'down';
+    if (room && calls.some((c) => c.floor === e.floor && c.direction === nh)) return { action: 'STOP', serving: nh };
+    return { action: dir[i] > 0 ? 'MOVE_UP' : 'MOVE_DOWN' };
+  }
+  // The only thing left is an opposite-direction call right here — serve it (don't idle on it).
+  if (room && calls.some((c) => c.floor === e.floor && c.direction === 'up')) { dir[i] = 1; return { action: 'STOP', serving: 'up' }; }
+  if (room && calls.some((c) => c.floor === e.floor && c.direction === 'down')) { dir[i] = -1; return { action: 'STOP', serving: 'down' }; }
+  return { action: 'IDLE' };
+}`;
+
+const MC_NAIVE = `// Multi-car, naive: hand EVERY car the same full list of hall calls and let each run the
+// LOOK brain you already know. Because they all see the same calls, they all chase the
+// same people and travel as a pack ("bunching") — three cars do barely more than one.
+function createController(config) {
+  const dir = Array.from({ length: config.numElevators }, () => 1);
+  return {
+    step(state) {
+      // No dispatch: every car is handed the SAME calls, so they herd together.
+      return state.elevators.map((e, i) => stepCar(e, i, state.hallCalls, dir));
+    },
+  };
+}
+${MC_STEP_CAR}`;
+
+const MC_CLAIM = `// Stop duplicating work: give each hall call to ONE car (the nearest with room), so two
+// cars never chase the same person. Each car then runs LOOK over just the calls it owns.
+function createController(config) {
+  const dir = Array.from({ length: config.numElevators }, () => 1);
+  return {
+    step(state) {
+      const cars = state.elevators;
+      const mine = cars.map(() => []); // hall calls assigned to each car
+      for (const call of state.hallCalls) {
+        let pick = -1, best = Infinity;
+        cars.forEach((e, i) => {
+          if (e.load >= e.capacity) return; // full: can't pick anyone up
+          const d = Math.abs(e.floor - call.floor);
+          if (d < best) { best = d; pick = i; }
+        });
+        if (pick !== -1) mine[pick].push(call);
+      }
+      return cars.map((e, i) => stepCar(e, i, mine[i], dir));
+    },
+  };
+}
+${MC_STEP_CAR}`;
+
+const MC_DISPATCH = `// Don't just pick the NEAREST car — pick the best-placed one: a car already sweeping
+// toward the call (and about to pass it) should take it, even if another is a hair closer.
+// A directional cost makes the cars specialise into regions and stop overlapping.
+function createController(config) {
+  const dir = Array.from({ length: config.numElevators }, () => 1);
+  return {
+    step(state) {
+      const cars = state.elevators;
+      const mine = cars.map(() => []);
+      for (const call of state.hallCalls) {
+        let pick = -1, best = Infinity;
+        cars.forEach((e, i) => {
+          if (e.load >= e.capacity) return;
+          const cost = reachCost(e, dir[i], call);
+          if (cost < best) { best = cost; pick = i; }
+        });
+        if (pick !== -1) mine[pick].push(call);
+      }
+      return cars.map((e, i) => stepCar(e, i, mine[i], dir));
+    },
+  };
+}
+// Cheap if the call is ahead of the car and the same way it's heading; pricier if the car
+// would have to pass it the wrong way, priciest if it sits behind us (a turnaround).
+function reachCost(e, d, call) {
+  const dist = Math.abs(call.floor - e.floor);
+  const ahead = d > 0 ? call.floor >= e.floor : call.floor <= e.floor;
+  const sameWay = (call.direction === 'up') === (d > 0);
+  if (ahead && sameWay) return dist;
+  if (ahead && !sameWay) return dist + 1000;
+  return dist + 2000;
+}
+${MC_STEP_CAR}`;
+
+const multiCarTrack = {
+  id: 'one-car-to-many',
+  title: 'From one car to a coordinated fleet',
+  blurb: 'Take the elevator algorithm to three cars: stop them bunching, then dispatch each call to the right car.',
+  scenario: multiCarScenario,
+  steps: [
+    {
+      id: 'per-car',
+      title: 'One brain, three cars',
+      kind: 'build',
+      concept: 'Group control — driving several cars at once',
+      intro: 'You have the elevator algorithm down for one car. Now there are three. The obvious first move: run that same LOOK brain on every car, independently — each returns its own command.',
+      problem: 'They bunch. All three see the same hall calls and chase the same people, travelling as a pack — so three cars do barely more than one.',
+      task: 'Just run it to see the baseline: every car already runs LOOK over all the calls. Watch the three cars clump together.',
+      code: MC_NAIVE,
+    },
+    {
+      id: 'claim',
+      title: 'One call, one car',
+      kind: 'build',
+      concept: 'Dispatch — divide the work so cars stop duplicating it',
+      intro: 'The cure for bunching: stop letting every car chase every call. Hand each waiting call to a single car, so they split the building between them.',
+      problem: 'Much better — the cars spread out. But picking the nearest car can hand a call to one that is heading away from it, forcing a U-turn.',
+      task: 'Before driving, assign each hall call to exactly one car (the nearest with room), and have each car serve only the calls it was given.',
+      code: MC_CLAIM,
+    },
+    {
+      id: 'cost',
+      title: 'A refinement: send the best-placed car',
+      kind: 'contrast',
+      concept: 'Cost-aware dispatch — prefer the car already heading there',
+      intro: 'One refinement on the dispatch you just built: instead of the nearest car, prefer the car already sweeping toward the call and about to pass it — even if another is a hair closer by floor count.',
+      problem: 'It usually trims a little more travel — most of all when distance is penalised heavily — but the big leap was dividing the work; this is the polish on top.',
+      task: 'Assign each call by a directional cost: cheap when the car is heading that way and the call is ahead, pricier when it would have to pass it the wrong way or turn around.',
+      contrastNote: 'A refinement, not a transformation: cost-aware dispatch usually edges out nearest-car — most of all when travel is weighted heavily — but the real leap was dividing the work in the first place. Watch where the two assignments send a car differently.',
+      code: MC_DISPATCH,
+    },
+  ],
+};
+
+// --- Tracks + tiny engine --------------------------------------------------------
+//
+// Phase 12 generalizes the single hardcoded track into a small ordered REGISTRY. Each
+// track is { id, title, blurb, scenario, steps }; the single-car FCFS→LOOK track is the
+// first entry. Every helper that used to assume the one track now takes the track (and
+// reads `track.scenario`), so the same engine + UI drive any track. The metrics/frames
+// caches key on track id + step id, so two tracks can't collide.
+
+export const tutorialTracks = [tutorial, multiCarTrack]; // the zoned track appends here (12B)
+
+export function getTutorialTracks() {
+  return tutorialTracks;
+}
+export function getTutorialTrack(id) {
+  return tutorialTracks.find((t) => t.id === id) || null;
+}
+// Back-compat: the first (single-car) track.
 export function getTutorial() {
-  return tutorial;
+  return tutorialTracks[0];
 }
 
-// The code the editor should show when a step begins: the PREVIOUS step's solution, so
-// the learner edits forward from where they were (the first step starts from FCFS).
-export function startCodeForStep(index) {
-  return index <= 0 ? tutorial.steps[0].code : tutorial.steps[index - 1].code;
+// The code the editor shows when a step begins: the PREVIOUS step's solution, so the
+// learner edits forward from where they were (the first step starts from its own code).
+export function startCodeForStep(track, index) {
+  return index <= 0 ? track.steps[0].code : track.steps[index - 1].code;
 }
 
-// Metrics of a step's TARGET code on the fixed scenario (cached). The single source for
-// (a) the step's "bar" — its composite — and (b) the before/after reference the UI shows
-// ("the previous step got this"). Trusted reference code, so it runs on the main thread;
-// the LEARNER's edited code, by contrast, must go through the sandboxed Worker.
+// A track's end-state step: its last BUILD step (the strong algorithm the ladder climbs
+// to). Its metrics are "par" for the diagnosis; a build step is cleared against its own
+// target. (A trailing 'contrast' or a leading 'demo' step is never the reference.)
+export function referenceStep(track) {
+  let ref = track.steps.find((s) => s.kind === 'build') || track.steps[0];
+  for (const s of track.steps) if (s.kind === 'build') ref = s;
+  return ref;
+}
+
+// Metrics / frames of a step's TARGET code on its track's fixed scenario (cached, keyed by
+// track+step). The single source for the step's "bar" and the before/after reference the
+// UI shows. Trusted reference code → runs on the main thread; the LEARNER's edited code,
+// by contrast, must go through the sandboxed Worker. Frames are recorded lazily (only the
+// before/after view needs them).
 const metricsCache = new Map();
-export function stepMetrics(step) {
-  if (metricsCache.has(step.id)) return metricsCache.get(step.id);
-  const m = runSimulation(tutorial.scenario, tutorial.scenario.seed, compileController(step.code)).metrics;
-  metricsCache.set(step.id, m);
+const framesCache = new Map();
+const keyOf = (track, step) => `${track.id}:${step.id}`;
+
+export function stepMetrics(track, step) {
+  const key = keyOf(track, step);
+  if (metricsCache.has(key)) return metricsCache.get(key);
+  const m = runSimulation(track.scenario, track.scenario.seed, compileController(step.code)).metrics;
+  metricsCache.set(key, m);
   return m;
 }
 
-// Composite of a step's target code on the fixed scenario. The "bar" a build step's run
-// must reach to count as cleared.
-export function goalComposite(step) {
-  return compositeOf(stepMetrics(step), tutorial.scenario.weights);
-}
-
-// Replay frames for a step's TARGET code on the fixed scenario (cached). Recorded lazily
-// — only the before/after view needs them — and used as the "before" track when a step
-// is replayed beside the previous one. Same scenario + seed as stepMetrics, so the
-// "before" picture matches the "before" numbers exactly.
-const framesCache = new Map();
-export function stepFrames(step) {
-  if (framesCache.has(step.id)) return framesCache.get(step.id);
-  const frames = runSimulation(tutorial.scenario, tutorial.scenario.seed, compileController(step.code), { record: true }).frames;
-  framesCache.set(step.id, frames);
+export function stepFrames(track, step) {
+  const key = keyOf(track, step);
+  if (framesCache.has(key)) return framesCache.get(key);
+  const frames = runSimulation(track.scenario, track.scenario.seed, compileController(step.code), { record: true }).frames;
+  framesCache.set(key, frames);
   return frames;
 }
 
-// Par for the run diagnosis: the end-state (LOOK) metrics, shaped as the curriculum
-// analyzer expects ({ look }). Reusing par=LOOK across every step means the diagnosis
-// always measures the gap to the strong algorithm — big at FCFS, shrinking each step,
-// quiet once you reach LOOK — which both shows the naive baseline failing and motivates
-// the next idea, exactly like the curriculum's feedback.
-export function tutorialPar() {
-  return { look: stepMetrics(tutorial.steps.find((s) => s.id === 'look')) };
+// Composite of a step's target code on its track's scenario — the "bar" a build step's run
+// must reach to count as cleared.
+export function goalComposite(track, step) {
+  return compositeOf(stepMetrics(track, step), track.scenario.weights);
 }
 
-// Did this run clear the step? Must deliver everyone; a build step must also reach
-// (within a small tolerance) its target's performance, proving the idea was applied. A
-// contrast step only needs to deliver — it's exploration, not a new best.
-export function stepCleared(step, playerMetrics) {
-  if (!playerMetrics || !playerMetrics.deliveredAll) return false;
+// Par for the run diagnosis: the end-state (reference step) metrics, shaped as the
+// curriculum analyzer expects ({ look }). Reusing par=end-state across every step means the
+// diagnosis always measures the gap to the strong algorithm — big at the naive step,
+// shrinking each step, quiet once you reach it — which shows the baseline failing and
+// motivates the next idea, exactly like the curriculum's feedback.
+export function parFor(track) {
+  return { look: stepMetrics(track, referenceStep(track)) };
+}
+
+// Did this run clear the step? Rules by kind:
+//   demo     — "just run it to see the problem" (e.g. the zoned naive step, which is MEANT
+//              to strand riders): clears as soon as a run produced metrics.
+//   contrast — exploration, not a new best: must deliver everyone, nothing more.
+//   build    — must deliver everyone AND reach (within tolerance) its target's performance,
+//              proving the idea was actually applied.
+export function stepCleared(track, step, playerMetrics) {
+  if (!playerMetrics) return false;
+  if (step.kind === 'demo') return true;
+  if (!playerMetrics.deliveredAll) return false;
   if (step.kind === 'contrast') return true;
-  const composite = compositeOf(playerMetrics, tutorial.scenario.weights);
-  return composite <= goalComposite(step) * 1.08;
+  const composite = compositeOf(playerMetrics, track.scenario.weights);
+  return composite <= goalComposite(track, step) * 1.08;
 }

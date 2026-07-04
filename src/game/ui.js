@@ -278,7 +278,7 @@ function deltaCell(val, prev) {
 // the first step). `analysis` is the analyzer's verdict on THIS run; `cleared` gates the
 // "next step" button (and on the last step it becomes "finish"). When there's a previous
 // step, a "watch before/after" button opens the side-by-side replay (Phase 11C).
-export function renderTutorialResult(el, { metrics, analysis, cleared, prevStep, prevMetrics, isLast, isContrast }) {
+export function renderTutorialResult(el, { metrics, analysis, cleared, prevStep, prevMetrics, isLast, isContrast, contrastNote }) {
   if (!metrics) {
     el.innerHTML = '';
     return;
@@ -288,10 +288,11 @@ export function renderTutorialResult(el, { metrics, analysis, cleared, prevStep,
   const compareRows = `
     <tr><td>This step</td>${deltaCell(m.avgWait, p && p.avgWait)}${deltaCell(m.maxWait, p && p.maxWait)}${deltaCell(m.distance, p && p.distance)}</tr>
     ${p ? `<tr class="tut-prev"><td>Previous (${escape(prevStep.id.toUpperCase())})</td><td>${fmt(p.avgWait)}</td><td>${fmt(p.maxWait)}</td><td>${fmt(p.distance)}</td></tr>` : ''}`;
-  // The contrast step (SSTF) earns an explicit "this is a trade-off" line — the arrows
-  // above already point in opposite directions; this names why.
-  const tradeoff = isContrast && p
-    ? `<p class="tut-tradeoff">A real trade-off, not a free win: weigh the average against the worst case above, then watch where the two strategies actually diverge.</p>`
+  // A contrast step (e.g. SSTF, or cost-aware dispatch) names how to read its result — a
+  // trade-off, or a marginal refinement — from the step's own copy. The arrows above
+  // already point the way; this says what it means.
+  const tradeoff = isContrast && p && contrastNote
+    ? `<p class="tut-tradeoff">${escape(contrastNote)}</p>`
     : '';
   const watchBtn = prevStep
     ? `<button class="ghost tut-compare" type="button">▶ ${isContrast ? 'Watch the trade-off' : 'Watch before / after'}</button>`

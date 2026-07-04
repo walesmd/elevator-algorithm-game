@@ -16,7 +16,7 @@ import { createRadio } from './audio/engine.js';
 import { isUnlocked } from './game/progression.js';
 import { renderBrief, renderResults, renderComparison, renderHints, renderSeedSwitcher, renderTutorialStep, renderTutorialResult } from './game/ui.js';
 import { analyze } from './game/analyzer.js';
-import { getTutorial, tutorialScenario, startCodeForStep, stepCleared, stepMetrics, stepFrames, tutorialPar } from './game/tutorial.js';
+import { getTutorialTracks, getTutorialTrack, startCodeForStep, stepCleared, stepMetrics, stepFrames, parFor } from './game/tutorial.js';
 import { createRenderer } from './render/renderer.js';
 import { createPlayer } from './render/playback.js';
 import { createSyncPlayer } from './render/syncplayer.js';
@@ -48,8 +48,9 @@ let cmpSpeed = 1;
 // Guided tutorial (Phase 11B): the opt-in, sanctioned walkthrough that derives the
 // elevator algorithm one idea at a time. While `active`, the editor/stage/run path are
 // reused but driven against the fixed tutorial scenario instead of the current level.
-const TUTORIAL = getTutorial();
-const tut = { active: false, index: 0, revealed: false, lastRun: null };
+const TUTORIAL_TRACKS = getTutorialTracks();
+const tut = { active: false, trackId: null, index: 0, revealed: false, lastRun: null };
+const activeTrack = () => getTutorialTrack(tut.trackId);
 
 async function run() {
   if (running) return; // ignore re-entry while a run is in flight
@@ -630,12 +631,50 @@ function dismissOnboarding() {
 // scenario, diagnoses the real run, and gates "next" on actually applying the idea. The
 // exact change is only ever shown on an explicit "show me" (the spoiler reveal).
 
-const tutStepKey = (i) => `tutorialCode:${TUTORIAL.steps[i].id}`;
-const clampStep = (i) => Math.max(0, Math.min(TUTORIAL.steps.length - 1, i | 0));
+// Per-track persistence keys: progress (furthest step index reached; == steps.length once
+// the final step is cleared) and the learner's in-progress code per step. Keying by track
+// id keeps each track's progress and code independent.
+const tutProgressKey = (trackId) => `tutorialProgress:${trackId}`;
+const tutStepKey = (trackId, i) => `tutorialCode:${trackId}:${getTutorialTrack(trackId).steps[i].id}`;
+const clampStep = (track, i) => Math.max(0, Math.min(track.steps.length - 1, i | 0));
 
-function enterTutorial() {
+// --- Track picker: choose which guided track to enter -------------------------------
+
+function openTrackPicker() {
   if (tut.active || running) return;
+  renderTrackList();
+  els.trackPicker.hidden = false;
+  const first = els.trackList.querySelector('button');
+  if (first) first.focus();
+}
+
+function closeTrackPicker() {
+  els.trackPicker.hidden = true;
+  els.startTutorial.focus();
+}
+
+function renderTrackList() {
+  els.trackList.innerHTML = TUTORIAL_TRACKS.map((t) => {
+    const total = t.steps.length;
+    const prog = getSetting(tutProgressKey(t.id), 0);
+    const status = prog >= total ? '✓ Completed' : prog <= 0 ? `${total} steps` : `Resume · step ${prog + 1} of ${total}`;
+    return `<button class="track-item" type="button" data-track="${escapeHtml(t.id)}">
+      <span class="track-item-title">${escapeHtml(t.title)}</span>
+      <span class="track-item-blurb">${escapeHtml(t.blurb || '')}</span>
+      <span class="track-item-status">${escapeHtml(status)}</span>
+    </button>`;
+  }).join('');
+}
+
+// --- The guided tutorial, parameterized by the active track -------------------------
+
+function enterTutorial(trackId) {
+  if (tut.active || running) return;
+  const track = getTutorialTrack(trackId);
+  if (!track) return;
+  closeTrackPicker();
   tut.active = true;
+  tut.trackId = trackId;
   closeCompare();
   els.levelBar.hidden = true; // the curriculum's level picker isn't part of the walkthrough
   els.gallery.hidden = true; // nor the spoiler gallery
@@ -643,15 +682,16 @@ function enterTutorial() {
   els.startTutorial.textContent = 'Exit tutorial';
   els.startTutorial.classList.add('active');
   els.resetBtn.textContent = 'Reset step';
-  // A renderer sized for the tutorial's geometry (12 floors, one car).
-  viz.renderer = createRenderer(els.canvas, tutorialScenario);
-  loadTutorialStep(clampStep(getSetting('tutorialProgress', 0)));
+  // A renderer sized for THIS track's geometry.
+  viz.renderer = createRenderer(els.canvas, track.scenario);
+  loadTutorialStep(clampStep(track, getSetting(tutProgressKey(trackId), 0)));
   revealInView(els.brief, 'start');
 }
 
 function exitTutorial() {
   if (!tut.active) return;
   tut.active = false;
+  tut.trackId = null;
   els.levelBar.hidden = false;
   els.startTutorial.textContent = 'Guided tutorial';
   els.startTutorial.classList.remove('active');
@@ -662,17 +702,18 @@ function exitTutorial() {
 
 // Show a step: its lesson card, the editor seeded with the learner's saved work for this
 // step (or the previous step's solution), and a clean stage. Reaching a step records it
-// as progress, so re-entering the tutorial later resumes here.
+// as progress, so re-entering this track later resumes here.
 function loadTutorialStep(index) {
-  tut.index = clampStep(index);
+  const track = activeTrack();
+  tut.index = clampStep(track, index);
   tut.revealed = false;
   tut.lastRun = null; // a new step has no run to compare yet
   closeCompare(); // any before/after view belonged to the previous step
-  const step = TUTORIAL.steps[tut.index];
-  setSetting('tutorialProgress', Math.max(getSetting('tutorialProgress', 0), tut.index));
-  renderTutorialStep(els.brief, { step, index: tut.index, total: TUTORIAL.steps.length, revealed: tut.revealed });
-  const saved = getSetting(tutStepKey(tut.index), null);
-  editor.setValue(saved != null ? saved : startCodeForStep(tut.index));
+  const step = track.steps[tut.index];
+  setSetting(tutProgressKey(tut.trackId), Math.max(getSetting(tutProgressKey(tut.trackId), 0), tut.index));
+  renderTutorialStep(els.brief, { step, index: tut.index, total: track.steps.length, revealed: tut.revealed });
+  const saved = getSetting(tutStepKey(tut.trackId, tut.index), null);
+  editor.setValue(saved != null ? saved : startCodeForStep(track, tut.index));
   els.results.innerHTML =
     '<p class="hint">Press <b>Run</b> to watch this step’s algorithm drive the building, then read the diagnosis.</p>';
   resetStage();
@@ -682,27 +723,31 @@ function loadTutorialStep(index) {
 // the step's target code into the editor; the learner still reads it and presses Run.
 function revealTutorialChange() {
   if (!tut.active) return;
-  const step = TUTORIAL.steps[tut.index];
+  const track = activeTrack();
+  const step = track.steps[tut.index];
   editor.setValue(step.code);
-  setSetting(tutStepKey(tut.index), step.code);
+  setSetting(tutStepKey(tut.trackId, tut.index), step.code);
   tut.revealed = true;
-  renderTutorialStep(els.brief, { step, index: tut.index, total: TUTORIAL.steps.length, revealed: true });
+  renderTutorialStep(els.brief, { step, index: tut.index, total: track.steps.length, revealed: true });
   editor.focus();
 }
 
 function resetTutorialStep() {
-  const code = startCodeForStep(tut.index);
+  const track = activeTrack();
+  const code = startCodeForStep(track, tut.index);
   editor.setValue(code);
-  setSetting(tutStepKey(tut.index), code);
+  setSetting(tutStepKey(tut.trackId, tut.index), code);
   editor.focus();
 }
 
 function advanceTutorial() {
   if (!tut.active) return;
-  const last = TUTORIAL.steps.length - 1;
+  const track = activeTrack();
+  const last = track.steps.length - 1;
   if (tut.index >= last) {
+    const title = track.title;
     exitTutorial();
-    showToast('🎓 Tutorial complete — now take what you built to the levels!');
+    showToast(`🎓 “${title}” complete — now take what you built to the levels!`);
     return;
   }
   loadTutorialStep(tut.index + 1);
@@ -713,21 +758,23 @@ function advanceTutorial() {
 // diagnose the real run, gate "next" on it actually applying the idea, and replay it.
 async function runTutorialStep() {
   if (running || !tut.active) return;
-  const step = TUTORIAL.steps[tut.index];
+  const track = activeTrack();
+  const step = track.steps[tut.index];
   const code = editor.getValue();
-  setSetting(tutStepKey(tut.index), code);
-  const seed = tutorialScenario.seed;
+  setSetting(tutStepKey(tut.trackId, tut.index), code);
+  const seed = track.scenario.seed;
   setRunning(true);
   try {
-    const res = await harness.score({ code, level: tutorialScenario, seeds: [seed], recordSeed: seed });
+    const res = await harness.score({ code, level: track.scenario, seeds: [seed], recordSeed: seed });
     if (!tut.active) return; // exited mid-run
     const metrics = res.perSeed[0].metrics;
-    const analysis = analyze({ frames: res.frames || [], metrics, par: tutorialPar(), level: tutorialScenario });
-    const cleared = stepCleared(step, metrics);
-    const last = TUTORIAL.steps.length - 1;
-    // Clearing a step unlocks the next as resume progress.
-    if (cleared) setSetting('tutorialProgress', Math.max(getSetting('tutorialProgress', 0), Math.min(tut.index + 1, last)));
-    const prevStep = tut.index > 0 ? TUTORIAL.steps[tut.index - 1] : null;
+    const analysis = analyze({ frames: res.frames || [], metrics, par: parFor(track), level: track.scenario });
+    const cleared = stepCleared(track, step, metrics);
+    const last = track.steps.length - 1;
+    // Clearing a step unlocks the next as resume progress (clearing the LAST step records
+    // steps.length, which the picker reads as "Completed").
+    if (cleared) setSetting(tutProgressKey(tut.trackId), Math.max(getSetting(tutProgressKey(tut.trackId), 0), tut.index + 1));
+    const prevStep = tut.index > 0 ? track.steps[tut.index - 1] : null;
     // Stash this run so the before/after view can replay it as the "after" track.
     tut.lastRun = { stepIndex: tut.index, frames: res.frames || [], metrics };
     renderTutorialResult(els.results, {
@@ -735,9 +782,10 @@ async function runTutorialStep() {
       analysis,
       cleared,
       prevStep,
-      prevMetrics: prevStep ? stepMetrics(prevStep) : null,
+      prevMetrics: prevStep ? stepMetrics(track, prevStep) : null,
       isLast: tut.index === last,
       isContrast: step.kind === 'contrast',
+      contrastNote: step.contrastNote,
     });
     if (res.frames && res.frames.length) {
       vizSource = null; // no seed switcher / per-seed table in the tutorial
@@ -756,19 +804,19 @@ async function runTutorialStep() {
 
 // The before/after view (Phase 11C): replay THIS step's actual run beside the PREVIOUS
 // step's reference run, on the same scenario + seed, via the A/B compare machinery —
-// `findMoments` curates where the two diverge. For the contrast step that's SSTF vs LOOK:
-// the trade-off (a left-behind rider, a thrashing car) shows up as notable moments.
+// `findMoments` curates where the two diverge.
 function tutorialBeforeAfter() {
   if (!tut.active || running) return;
+  const track = activeTrack();
   const lr = tut.lastRun;
   if (!lr || !lr.frames.length || lr.stepIndex <= 0) return;
-  const step = TUTORIAL.steps[lr.stepIndex];
-  const prevStep = TUTORIAL.steps[lr.stepIndex - 1];
-  const seed = tutorialScenario.seed;
-  const A = { frames: stepFrames(prevStep), metrics: stepMetrics(prevStep), label: prevStep.id.toUpperCase() }; // before
+  const step = track.steps[lr.stepIndex];
+  const prevStep = track.steps[lr.stepIndex - 1];
+  const seed = track.scenario.seed;
+  const A = { frames: stepFrames(track, prevStep), metrics: stepMetrics(track, prevStep), label: prevStep.id.toUpperCase() }; // before
   const B = { frames: lr.frames, metrics: lr.metrics, label: step.id.toUpperCase() }; // after (the learner's run)
   els.compareView.hidden = false;
-  setupCompare(tutorialScenario, seed, A, B, {
+  setupCompare(track.scenario, seed, A, B, {
     heading: 'Before / after',
     labelA: `Previous · ${A.label}`,
     labelB: `This step · ${B.label}`,
@@ -788,9 +836,16 @@ function showToast(msg) {
 function bindControls() {
   els.runBtn.addEventListener('click', run);
 
-  // Guided tutorial (Phase 11B): the header button toggles the mode; the lesson card
-  // carries its own Exit and the spoiler reveal; "Next step" lives in the results card.
-  els.startTutorial.addEventListener('click', () => (tut.active ? exitTutorial() : enterTutorial()));
+  // Guided tutorials (Phase 11B/12A): the header button opens a track picker (or exits
+  // when in a track); the lesson card carries its own Exit + spoiler reveal; "Next step"
+  // lives in the results card.
+  els.startTutorial.addEventListener('click', () => (tut.active ? exitTutorial() : openTrackPicker()));
+  els.trackList.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-track]');
+    if (btn) enterTutorial(btn.dataset.track);
+  });
+  els.trackPickerClose.addEventListener('click', closeTrackPicker);
+  els.trackPicker.addEventListener('click', (e) => { if (e.target === els.trackPicker) closeTrackPicker(); });
   els.brief.addEventListener('click', (e) => {
     if (!tut.active) return;
     if (e.target.closest('.tut-exit')) exitTutorial();
@@ -802,7 +857,9 @@ function bindControls() {
   els.onboardingGo.addEventListener('click', dismissOnboarding);
   els.onboarding.addEventListener('click', (e) => { if (e.target === els.onboarding) dismissOnboarding(); });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !els.onboarding.hidden) dismissOnboarding();
+    if (e.key !== 'Escape') return;
+    if (!els.onboarding.hidden) dismissOnboarding();
+    else if (!els.trackPicker.hidden) closeTrackPicker();
   });
 
   // Tiered hints: each click reveals the next rung (capped at 3), then re-renders.
@@ -1003,8 +1060,11 @@ function init() {
     onboarding: document.getElementById('onboarding'),
     onboardingGo: document.getElementById('onboarding-go'),
     howItWorks: document.getElementById('how-it-works'),
-    // Guided tutorial (Phase 11B)
+    // Guided tutorials (Phase 11B / 12A)
     startTutorial: document.getElementById('start-tutorial'),
+    trackPicker: document.getElementById('track-picker'),
+    trackList: document.getElementById('track-list'),
+    trackPickerClose: document.getElementById('track-picker-close'),
     // Radio (Phase 9)
     radio: document.getElementById('radio'),
     radioMute: document.getElementById('radio-mute'),
@@ -1022,7 +1082,7 @@ function init() {
   editor = createEditor(els.editorMount, {
     value: STARTER_CODE,
     onChange: (code) => {
-      if (tut.active) setSetting(tutStepKey(tut.index), code);
+      if (tut.active) setSetting(tutStepKey(tut.trackId, tut.index), code);
       else saveCode(currentLevel.id, code);
     },
   });
